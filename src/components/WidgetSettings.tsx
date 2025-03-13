@@ -40,21 +40,23 @@ const WidgetSettings = () => {
   }, [session]);
 
   const loadSettings = async () => {
-    const { data, error } = await supabase
+    // First try to get existing settings
+    const { data: existingSettings, error: fetchError } = await supabase
       .from('widget_settings')
       .select('*')
       .eq('user_id', session?.user.id)
-      .single();
+      .limit(1)
+      .maybeSingle();
 
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error loading settings:', error);
+    if (fetchError) {
+      console.error('Error loading settings:', fetchError);
       return;
     }
 
-    if (data) {
-      setSettings(data);
+    if (existingSettings) {
+      setSettings(existingSettings);
     } else {
-      // Create initial settings
+      // Create initial settings if none exist
       const { data: newSettings, error: createError } = await supabase
         .from('widget_settings')
         .insert([
