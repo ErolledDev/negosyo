@@ -14,8 +14,12 @@ class BusinessChatPlugin {
     this.isOpen = false;
     this.unreadCount = 0;
 
-    this.initSupabase();
-    this.loadSettings();
+    this.init();
+  }
+
+  async init() {
+    await this.initSupabase();
+    await this.loadSettings();
     this.createWidget();
     this.subscribeToMessages();
   }
@@ -26,6 +30,11 @@ class BusinessChatPlugin {
   }
 
   async loadSettings() {
+    if (!this.supabase) {
+      console.error('Supabase client not initialized');
+      return;
+    }
+
     const { data, error } = await this.supabase
       .from('widget_settings')
       .select('*, quick_questions(*)')
@@ -191,6 +200,11 @@ class BusinessChatPlugin {
   }
 
   async createConversation() {
+    if (!this.supabase) {
+      console.error('Supabase client not initialized');
+      return;
+    }
+
     const { data, error } = await this.supabase
       .from('conversations')
       .insert({
@@ -210,10 +224,15 @@ class BusinessChatPlugin {
   }
 
   async sendMessage(content = this.input.value.trim()) {
-    if (!content) return;
+    if (!content || !this.supabase) return;
 
     if (!this.conversationId) {
       await this.createConversation();
+    }
+
+    if (!this.conversationId) {
+      console.error('Failed to create conversation');
+      return;
     }
 
     const { error } = await this.supabase.from('messages').insert({
@@ -235,7 +254,7 @@ class BusinessChatPlugin {
   }
 
   async loadMessages() {
-    if (!this.conversationId) return;
+    if (!this.conversationId || !this.supabase) return;
 
     const { data, error } = await this.supabase
       .from('messages')
@@ -283,6 +302,11 @@ class BusinessChatPlugin {
   }
 
   subscribeToMessages() {
+    if (!this.supabase) {
+      console.error('Supabase client not initialized');
+      return;
+    }
+
     this.supabase
       .channel('messages')
       .on(
@@ -329,18 +353,30 @@ class BusinessChatPlugin {
   }
 }
 
-// Make the chat instance available globally
-window.businessChat = null;
+// Initialize the chat widget
+const initChat = () => {
+  const scripts = document.getElementsByTagName('script');
+  let configScript = null;
 
-// Initialize the chat widget when the script loads
-window.addEventListener('load', () => {
-  const script = document.currentScript;
-  const configScript = script.nextElementSibling;
-  
+  // Find the config script that follows the chat.js script
+  for (let i = 0; i < scripts.length; i++) {
+    if (scripts[i].src.includes('chat.js') && i + 1 < scripts.length) {
+      configScript = scripts[i + 1];
+      break;
+    }
+  }
+
   if (configScript && configScript.textContent.includes('BusinessChatPlugin')) {
-    // Execute the configuration script after a small delay to ensure it's loaded
+    // Execute the configuration script
     setTimeout(() => {
       window.businessChat = new BusinessChatPlugin(window.businessChatConfig);
     }, 100);
   }
-});
+};
+
+// Initialize when the DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initChat);
+} else {
+  initChat();
+}
