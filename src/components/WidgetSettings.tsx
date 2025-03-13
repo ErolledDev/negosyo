@@ -169,9 +169,9 @@ const WidgetSettings = () => {
   const copyInstallCode = () => {
     const code = `<script src="https://business-live-chat.netlify.app/chat.js"></script>
 <script>
-  new BusinessChatPlugin({
+  window.businessChatConfig = {
     uid: "${settings.id}"
-  });
+  };
 </script>`;
     
     navigator.clipboard.writeText(code);
@@ -329,9 +329,9 @@ const WidgetSettings = () => {
                 <pre className="text-sm text-white overflow-x-auto whitespace-pre-wrap">
                   {`<script src="https://business-live-chat.netlify.app/chat.js"></script>
 <script>
-  new BusinessChatPlugin({
+  window.businessChatConfig = {
     uid: "${settings.id}"
-  });
+  };
 </script>`}
                 </pre>
               </div>

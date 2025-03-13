@@ -37,7 +37,14 @@ class BusinessChatPlugin {
 
     const { data, error } = await this.supabase
       .from('widget_settings')
-      .select('*, quick_questions(*)')
+      .select(`
+        *,
+        quick_questions (
+          id,
+          question,
+          question_order
+        )
+      `)
       .eq('id', this.widgetId)
       .single();
 
@@ -100,12 +107,6 @@ class BusinessChatPlugin {
     this.header.style.display = 'flex';
     this.header.style.alignItems = 'center';
     this.header.style.gap = '8px';
-    this.header.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-      </svg>
-      <span style="font-weight: 600;">Chat with us</span>
-    `;
 
     // Create messages container
     this.messagesContainer = document.createElement('div');
@@ -119,6 +120,9 @@ class BusinessChatPlugin {
     this.inputContainer.style.borderTop = '1px solid #e5e7eb';
     this.inputContainer.style.display = 'flex';
     this.inputContainer.style.gap = '8px';
+    this.inputContainer.style.backgroundColor = '#fff';
+    this.inputContainer.style.position = 'relative';
+    this.inputContainer.style.zIndex = '1';
 
     // Create message input
     this.input = document.createElement('input');
@@ -129,8 +133,12 @@ class BusinessChatPlugin {
     this.input.style.border = '1px solid #e5e7eb';
     this.input.style.borderRadius = '6px';
     this.input.style.outline = 'none';
+    this.input.style.backgroundColor = '#fff';
     this.input.onkeypress = (e) => {
-      if (e.key === 'Enter') this.sendMessage();
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.sendMessage();
+      }
     };
 
     // Create send button
@@ -171,22 +179,37 @@ class BusinessChatPlugin {
   updateWidgetStyles() {
     if (!this.widgetSettings) return;
 
+    // Update colors
     this.button.style.backgroundColor = this.widgetSettings.primary_color;
     this.button.style.color = '#ffffff';
     this.sendButton.style.backgroundColor = this.widgetSettings.primary_color;
     this.sendButton.style.color = '#ffffff';
-    this.header.style.color = this.widgetSettings.primary_color;
 
-    // Update welcome message
+    // Update header with business name
+    this.header.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${this.widgetSettings.primary_color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+      <div>
+        <div style="font-weight: 600; color: ${this.widgetSettings.primary_color}">${this.widgetSettings.business_name}</div>
+      </div>
+    `;
+
+    // Update welcome message and quick questions
     if (!this.conversationId) {
+      const quickQuestions = this.widgetSettings.quick_questions || [];
+      quickQuestions.sort((a, b) => a.question_order - b.question_order);
+
       this.messagesContainer.innerHTML = `
         <div style="margin-bottom: 16px;">
-          <p style="margin-bottom: 12px;">${this.widgetSettings.welcome_message}</p>
-          ${this.widgetSettings.quick_questions
+          <p style="margin-bottom: 12px; color: #374151;">${this.widgetSettings.welcome_message}</p>
+          ${quickQuestions
             .map(
               (q) => `
                 <button
-                  style="display: block; width: 100%; text-align: left; padding: 8px 12px; margin: 4px 0; background: #f3f4f6; border: none; border-radius: 6px; cursor: pointer;"
+                  style="display: block; width: 100%; text-align: left; padding: 8px 12px; margin: 4px 0; background: #f3f4f6; border: none; border-radius: 6px; cursor: pointer; color: #374151; transition: all 0.2s;"
+                  onmouseover="this.style.backgroundColor='${this.widgetSettings.primary_color}'; this.style.color='white';"
+                  onmouseout="this.style.backgroundColor='#f3f4f6'; this.style.color='#374151';"
                   onclick="window.businessChat.sendQuickQuestion('${q.question}')"
                 >
                   ${q.question}
@@ -272,6 +295,8 @@ class BusinessChatPlugin {
   }
 
   renderMessages() {
+    if (!this.widgetSettings) return;
+
     this.messagesContainer.innerHTML = this.messages
       .map(
         (message) => `
@@ -289,7 +314,7 @@ class BusinessChatPlugin {
                   ? this.widgetSettings.primary_color
                   : '#f3f4f6'
               };
-              color: ${message.is_from_visitor ? '#ffffff' : '#000000'};
+              color: ${message.is_from_visitor ? '#ffffff' : '#374151'};
             ">
               ${message.content}
             </div>
@@ -349,28 +374,19 @@ class BusinessChatPlugin {
       this.unreadCount = 0;
       this.updateUnreadBadge();
       this.loadMessages();
+      this.input.focus();
     }
   }
 }
 
 // Initialize the chat widget
+window.businessChat = null;
+
 const initChat = () => {
-  const scripts = document.getElementsByTagName('script');
-  let configScript = null;
-
-  // Find the config script that follows the chat.js script
-  for (let i = 0; i < scripts.length; i++) {
-    if (scripts[i].src.includes('chat.js') && i + 1 < scripts.length) {
-      configScript = scripts[i + 1];
-      break;
-    }
-  }
-
-  if (configScript && configScript.textContent.includes('BusinessChatPlugin')) {
-    // Execute the configuration script
-    setTimeout(() => {
-      window.businessChat = new BusinessChatPlugin(window.businessChatConfig);
-    }, 100);
+  if (window.businessChatConfig && window.businessChatConfig.uid) {
+    window.businessChat = new BusinessChatPlugin(window.businessChatConfig);
+  } else {
+    console.error('BusinessChatPlugin: Configuration not found');
   }
 };
 
