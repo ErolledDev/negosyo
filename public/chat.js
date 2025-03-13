@@ -8,11 +8,17 @@ class BusinessChatPlugin {
     this.widgetId = config.uid;
     this.supabaseUrl = 'https://tkimzusnrpcbxrtliyji.supabase.co';
     this.supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRraW16dXNucnBjYnhydGxpeWppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE4Nzc2NTksImV4cCI6MjA1NzQ1MzY1OX0.OMFJ9WHQQR3aUrq4zNb-Rs1K0teeJkCBI5AHIvMFn3s';
-    this.widgetSettings = null;
+    this.widgetSettings = {
+      business_name: 'Chat Support',
+      primary_color: '#3B82F6',
+      welcome_message: 'Welcome! How can we help you today?',
+      quick_questions: []
+    };
     this.conversationId = null;
     this.messages = [];
     this.isOpen = false;
     this.unreadCount = 0;
+    this.elements = {};
     this.styles = {
       container: {
         position: 'fixed',
@@ -96,19 +102,6 @@ class BusinessChatPlugin {
         fontSize: '12px',
         fontWeight: 'bold',
         display: 'none'
-      },
-      quickQuestion: {
-        display: 'block',
-        width: '100%',
-        textAlign: 'left',
-        padding: '8px 12px',
-        margin: '4px 0',
-        background: '#f3f4f6',
-        border: 'none',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        color: '#374151',
-        transition: 'all 0.2s'
       }
     };
 
@@ -116,9 +109,9 @@ class BusinessChatPlugin {
   }
 
   async init() {
+    this.createWidget();
     await this.initSupabase();
     await this.loadSettings();
-    this.createWidget();
     this.subscribeToMessages();
   }
 
@@ -158,13 +151,6 @@ class BusinessChatPlugin {
       this.updateWidgetStyles();
     } catch (error) {
       console.error('Error loading widget settings:', error);
-      // Set default values if settings can't be loaded
-      this.widgetSettings = {
-        business_name: 'Chat Support',
-        primary_color: '#3B82F6',
-        welcome_message: 'Welcome! How can we help you today?',
-        quick_questions: []
-      };
       this.updateWidgetStyles();
     }
   }
@@ -174,47 +160,48 @@ class BusinessChatPlugin {
   }
 
   applyStyles(element, styles) {
+    if (!element || !element.style) return;
     Object.assign(element.style, styles);
   }
 
   createWidget() {
     // Create widget container
-    this.container = document.createElement('div');
-    this.container.id = 'business-chat-widget';
-    this.applyStyles(this.container, this.getStyle('container'));
+    this.elements.container = document.createElement('div');
+    this.elements.container.id = 'business-chat-widget';
+    this.applyStyles(this.elements.container, this.getStyle('container'));
 
     // Create widget button
-    this.button = document.createElement('button');
-    this.applyStyles(this.button, this.getStyle('button'));
-    this.button.innerHTML = `
+    this.elements.button = document.createElement('button');
+    this.applyStyles(this.elements.button, this.getStyle('button'));
+    this.elements.button.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
       </svg>
     `;
-    this.button.onclick = () => this.toggleWidget();
+    this.elements.button.onclick = () => this.toggleWidget();
 
     // Create chat window
-    this.chatWindow = document.createElement('div');
-    this.applyStyles(this.chatWindow, this.getStyle('chatWindow'));
+    this.elements.chatWindow = document.createElement('div');
+    this.applyStyles(this.elements.chatWindow, this.getStyle('chatWindow'));
 
     // Create header
-    this.header = document.createElement('div');
-    this.applyStyles(this.header, this.getStyle('header'));
+    this.elements.header = document.createElement('div');
+    this.applyStyles(this.elements.header, this.getStyle('header'));
 
     // Create messages container
-    this.messagesContainer = document.createElement('div');
-    this.applyStyles(this.messagesContainer, this.getStyle('messagesContainer'));
+    this.elements.messagesContainer = document.createElement('div');
+    this.applyStyles(this.elements.messagesContainer, this.getStyle('messagesContainer'));
 
     // Create input container
-    this.inputContainer = document.createElement('div');
-    this.applyStyles(this.inputContainer, this.getStyle('inputContainer'));
+    this.elements.inputContainer = document.createElement('div');
+    this.applyStyles(this.elements.inputContainer, this.getStyle('inputContainer'));
 
     // Create message input
-    this.input = document.createElement('input');
-    this.input.type = 'text';
-    this.input.placeholder = 'Type your message...';
-    this.applyStyles(this.input, this.getStyle('input'));
-    this.input.onkeypress = (e) => {
+    this.elements.input = document.createElement('input');
+    this.elements.input.type = 'text';
+    this.elements.input.placeholder = 'Type your message...';
+    this.applyStyles(this.elements.input, this.getStyle('input'));
+    this.elements.input.onkeypress = (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         this.sendMessage();
@@ -222,28 +209,25 @@ class BusinessChatPlugin {
     };
 
     // Create send button
-    this.sendButton = document.createElement('button');
-    this.sendButton.innerHTML = 'Send';
-    this.applyStyles(this.sendButton, this.getStyle('sendButton'));
-    this.sendButton.onclick = () => this.sendMessage();
+    this.elements.sendButton = document.createElement('button');
+    this.elements.sendButton.innerHTML = 'Send';
+    this.applyStyles(this.elements.sendButton, this.getStyle('sendButton'));
+    this.elements.sendButton.onclick = () => this.sendMessage();
 
     // Create unread badge
-    this.unreadBadge = document.createElement('div');
-    this.applyStyles(this.unreadBadge, this.getStyle('unreadBadge'));
-    this.button.appendChild(this.unreadBadge);
+    this.elements.unreadBadge = document.createElement('div');
+    this.applyStyles(this.elements.unreadBadge, this.getStyle('unreadBadge'));
+    this.elements.button.appendChild(this.elements.unreadBadge);
 
     // Assemble the widget
-    this.inputContainer.appendChild(this.input);
-    this.inputContainer.appendChild(this.sendButton);
-    this.chatWindow.appendChild(this.header);
-    this.chatWindow.appendChild(this.messagesContainer);
-    this.chatWindow.appendChild(this.inputContainer);
-    this.container.appendChild(this.chatWindow);
-    this.container.appendChild(this.button);
-    document.body.appendChild(this.container);
-
-    // Initialize with default styles
-    this.updateWidgetStyles();
+    this.elements.inputContainer.appendChild(this.elements.input);
+    this.elements.inputContainer.appendChild(this.elements.sendButton);
+    this.elements.chatWindow.appendChild(this.elements.header);
+    this.elements.chatWindow.appendChild(this.elements.messagesContainer);
+    this.elements.chatWindow.appendChild(this.elements.inputContainer);
+    this.elements.container.appendChild(this.elements.chatWindow);
+    this.elements.container.appendChild(this.elements.button);
+    document.body.appendChild(this.elements.container);
   }
 
   updateWidgetStyles() {
@@ -252,36 +236,39 @@ class BusinessChatPlugin {
     const primaryColor = this.widgetSettings.primary_color || '#3B82F6';
 
     // Update button styles
-    this.applyStyles(this.button, {
+    this.applyStyles(this.elements.button, {
       ...this.getStyle('button'),
       backgroundColor: primaryColor,
       color: '#ffffff'
     });
 
     // Update send button styles
-    this.applyStyles(this.sendButton, {
+    this.applyStyles(this.elements.sendButton, {
       ...this.getStyle('sendButton'),
       backgroundColor: primaryColor,
       color: '#ffffff'
     });
 
     // Update header with business name
-    this.header.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-      </svg>
-      <div>
-        <div style="font-weight: 600; color: ${primaryColor}">${this.widgetSettings.business_name || 'Chat Support'}</div>
-      </div>
-    `;
+    if (this.elements.header) {
+      this.elements.header.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <div>
+          <div style="font-weight: 600; color: ${primaryColor}">${this.widgetSettings.business_name || 'Chat Support'}</div>
+        </div>
+      `;
+    }
 
     // Update welcome message and quick questions
-    if (!this.conversationId) {
+    if (!this.conversationId && this.elements.messagesContainer) {
       const quickQuestions = this.widgetSettings.quick_questions || [];
+      const welcomeMessage = this.widgetSettings.welcome_message || 'Welcome! How can we help you today?';
 
-      this.messagesContainer.innerHTML = `
+      this.elements.messagesContainer.innerHTML = `
         <div style="margin-bottom: 16px;">
-          <p style="margin-bottom: 12px; color: #374151;">${this.widgetSettings.welcome_message || 'Welcome! How can we help you today?'}</p>
+          <p style="margin-bottom: 12px; color: #374151;">${welcomeMessage}</p>
           ${quickQuestions.map((q) => `
             <button
               onclick="window.businessChat.sendQuickQuestion('${q.question}')"
@@ -325,7 +312,7 @@ class BusinessChatPlugin {
     }
   }
 
-  async sendMessage(content = this.input.value.trim()) {
+  async sendMessage(content = this.elements.input.value.trim()) {
     if (!content || !this.supabase) return;
 
     if (!this.conversationId) {
@@ -349,7 +336,7 @@ class BusinessChatPlugin {
         throw error;
       }
 
-      this.input.value = '';
+      this.elements.input.value = '';
       await this.loadMessages();
     } catch (error) {
       console.error('Error sending message:', error);
@@ -382,9 +369,9 @@ class BusinessChatPlugin {
   }
 
   renderMessages() {
-    if (!this.widgetSettings) return;
+    if (!this.widgetSettings || !this.elements.messagesContainer) return;
 
-    this.messagesContainer.innerHTML = this.messages
+    this.elements.messagesContainer.innerHTML = this.messages
       .map(
         (message) => `
           <div style="
@@ -410,7 +397,7 @@ class BusinessChatPlugin {
       )
       .join('');
 
-    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    this.elements.messagesContainer.scrollTop = this.elements.messagesContainer.scrollHeight;
   }
 
   subscribeToMessages() {
@@ -446,22 +433,28 @@ class BusinessChatPlugin {
   }
 
   updateUnreadBadge() {
+    if (!this.elements.unreadBadge) return;
+
     if (this.unreadCount > 0) {
-      this.unreadBadge.style.display = 'block';
-      this.unreadBadge.textContent = this.unreadCount;
+      this.elements.unreadBadge.style.display = 'block';
+      this.elements.unreadBadge.textContent = this.unreadCount;
     } else {
-      this.unreadBadge.style.display = 'none';
+      this.elements.unreadBadge.style.display = 'none';
     }
   }
 
   toggleWidget() {
     this.isOpen = !this.isOpen;
-    this.chatWindow.style.display = this.isOpen ? 'flex' : 'none';
+    if (this.elements.chatWindow) {
+      this.elements.chatWindow.style.display = this.isOpen ? 'flex' : 'none';
+    }
     if (this.isOpen) {
       this.unreadCount = 0;
       this.updateUnreadBadge();
       this.loadMessages();
-      this.input.focus();
+      if (this.elements.input) {
+        this.elements.input.focus();
+      }
     }
   }
 }
