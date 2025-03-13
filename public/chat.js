@@ -13,6 +13,100 @@ class BusinessChatPlugin {
     this.messages = [];
     this.isOpen = false;
     this.unreadCount = 0;
+    this.styles = {
+      container: {
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        zIndex: '9999',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
+      },
+      button: {
+        width: '60px',
+        height: '60px',
+        borderRadius: '50%',
+        border: 'none',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        position: 'relative'
+      },
+      chatWindow: {
+        display: 'none',
+        position: 'absolute',
+        bottom: '80px',
+        right: '0',
+        width: '350px',
+        height: '500px',
+        backgroundColor: '#fff',
+        borderRadius: '12px',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        overflow: 'hidden',
+        flexDirection: 'column'
+      },
+      header: {
+        padding: '16px',
+        borderBottom: '1px solid #e5e7eb',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      },
+      messagesContainer: {
+        flex: '1',
+        overflowY: 'auto',
+        padding: '16px'
+      },
+      inputContainer: {
+        padding: '16px',
+        borderTop: '1px solid #e5e7eb',
+        display: 'flex',
+        gap: '8px',
+        backgroundColor: '#fff',
+        position: 'relative',
+        zIndex: '1'
+      },
+      input: {
+        flex: '1',
+        padding: '8px 12px',
+        border: '1px solid #e5e7eb',
+        borderRadius: '6px',
+        outline: 'none',
+        backgroundColor: '#fff'
+      },
+      sendButton: {
+        padding: '8px 16px',
+        border: 'none',
+        borderRadius: '6px',
+        cursor: 'pointer'
+      },
+      unreadBadge: {
+        position: 'absolute',
+        top: '-5px',
+        right: '-5px',
+        backgroundColor: '#ef4444',
+        color: 'white',
+        borderRadius: '9999px',
+        padding: '2px 6px',
+        fontSize: '12px',
+        fontWeight: 'bold',
+        display: 'none'
+      },
+      quickQuestion: {
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: '8px 12px',
+        margin: '4px 0',
+        background: '#f3f4f6',
+        border: 'none',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        color: '#374151',
+        transition: 'all 0.2s'
+      }
+    };
 
     this.init();
   }
@@ -35,49 +129,48 @@ class BusinessChatPlugin {
       return;
     }
 
-    const { data, error } = await this.supabase
-      .from('widget_settings')
-      .select(`
-        *,
-        quick_questions (
-          id,
-          question,
-          question_order
-        )
-      `)
-      .eq('id', this.widgetId)
-      .single();
+    try {
+      const { data, error } = await this.supabase
+        .from('widget_settings')
+        .select(`
+          *,
+          quick_questions (
+            id,
+            question,
+            question_order
+          )
+        `)
+        .eq('id', this.widgetId)
+        .single();
 
-    if (error) {
+      if (error) {
+        throw error;
+      }
+
+      this.widgetSettings = data;
+      this.updateWidgetStyles();
+    } catch (error) {
       console.error('Error loading widget settings:', error);
-      return;
     }
+  }
 
-    this.widgetSettings = data;
-    this.updateWidgetStyles();
+  getStyle(element) {
+    return { ...this.styles[element] };
+  }
+
+  applyStyles(element, styles) {
+    Object.assign(element.style, styles);
   }
 
   createWidget() {
     // Create widget container
     this.container = document.createElement('div');
     this.container.id = 'business-chat-widget';
-    this.container.style.position = 'fixed';
-    this.container.style.bottom = '20px';
-    this.container.style.right = '20px';
-    this.container.style.zIndex = '9999';
-    this.container.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+    this.applyStyles(this.container, this.getStyle('container'));
 
     // Create widget button
     this.button = document.createElement('button');
-    this.button.style.width = '60px';
-    this.button.style.height = '60px';
-    this.button.style.borderRadius = '50%';
-    this.button.style.border = 'none';
-    this.button.style.cursor = 'pointer';
-    this.button.style.display = 'flex';
-    this.button.style.alignItems = 'center';
-    this.button.style.justifyContent = 'center';
-    this.button.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+    this.applyStyles(this.button, this.getStyle('button'));
     this.button.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -87,53 +180,25 @@ class BusinessChatPlugin {
 
     // Create chat window
     this.chatWindow = document.createElement('div');
-    this.chatWindow.style.display = 'none';
-    this.chatWindow.style.position = 'absolute';
-    this.chatWindow.style.bottom = '80px';
-    this.chatWindow.style.right = '0';
-    this.chatWindow.style.width = '350px';
-    this.chatWindow.style.height = '500px';
-    this.chatWindow.style.backgroundColor = '#fff';
-    this.chatWindow.style.borderRadius = '12px';
-    this.chatWindow.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-    this.chatWindow.style.overflow = 'hidden';
-    this.chatWindow.style.display = 'none';
-    this.chatWindow.style.flexDirection = 'column';
+    this.applyStyles(this.chatWindow, this.getStyle('chatWindow'));
 
     // Create header
     this.header = document.createElement('div');
-    this.header.style.padding = '16px';
-    this.header.style.borderBottom = '1px solid #e5e7eb';
-    this.header.style.display = 'flex';
-    this.header.style.alignItems = 'center';
-    this.header.style.gap = '8px';
+    this.applyStyles(this.header, this.getStyle('header'));
 
     // Create messages container
     this.messagesContainer = document.createElement('div');
-    this.messagesContainer.style.flex = '1';
-    this.messagesContainer.style.overflowY = 'auto';
-    this.messagesContainer.style.padding = '16px';
+    this.applyStyles(this.messagesContainer, this.getStyle('messagesContainer'));
 
     // Create input container
     this.inputContainer = document.createElement('div');
-    this.inputContainer.style.padding = '16px';
-    this.inputContainer.style.borderTop = '1px solid #e5e7eb';
-    this.inputContainer.style.display = 'flex';
-    this.inputContainer.style.gap = '8px';
-    this.inputContainer.style.backgroundColor = '#fff';
-    this.inputContainer.style.position = 'relative';
-    this.inputContainer.style.zIndex = '1';
+    this.applyStyles(this.inputContainer, this.getStyle('inputContainer'));
 
     // Create message input
     this.input = document.createElement('input');
     this.input.type = 'text';
     this.input.placeholder = 'Type your message...';
-    this.input.style.flex = '1';
-    this.input.style.padding = '8px 12px';
-    this.input.style.border = '1px solid #e5e7eb';
-    this.input.style.borderRadius = '6px';
-    this.input.style.outline = 'none';
-    this.input.style.backgroundColor = '#fff';
+    this.applyStyles(this.input, this.getStyle('input'));
     this.input.onkeypress = (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -144,11 +209,13 @@ class BusinessChatPlugin {
     // Create send button
     this.sendButton = document.createElement('button');
     this.sendButton.innerHTML = 'Send';
-    this.sendButton.style.padding = '8px 16px';
-    this.sendButton.style.border = 'none';
-    this.sendButton.style.borderRadius = '6px';
-    this.sendButton.style.cursor = 'pointer';
+    this.applyStyles(this.sendButton, this.getStyle('sendButton'));
     this.sendButton.onclick = () => this.sendMessage();
+
+    // Create unread badge
+    this.unreadBadge = document.createElement('div');
+    this.applyStyles(this.unreadBadge, this.getStyle('unreadBadge'));
+    this.button.appendChild(this.unreadBadge);
 
     // Assemble the widget
     this.inputContainer.appendChild(this.input);
@@ -159,39 +226,34 @@ class BusinessChatPlugin {
     this.container.appendChild(this.chatWindow);
     this.container.appendChild(this.button);
     document.body.appendChild(this.container);
-
-    // Create unread badge
-    this.unreadBadge = document.createElement('div');
-    this.unreadBadge.style.position = 'absolute';
-    this.unreadBadge.style.top = '-5px';
-    this.unreadBadge.style.right = '-5px';
-    this.unreadBadge.style.backgroundColor = '#ef4444';
-    this.unreadBadge.style.color = 'white';
-    this.unreadBadge.style.borderRadius = '9999px';
-    this.unreadBadge.style.padding = '2px 6px';
-    this.unreadBadge.style.fontSize = '12px';
-    this.unreadBadge.style.fontWeight = 'bold';
-    this.unreadBadge.style.display = 'none';
-    this.button.style.position = 'relative';
-    this.button.appendChild(this.unreadBadge);
   }
 
   updateWidgetStyles() {
     if (!this.widgetSettings) return;
 
-    // Update colors
-    this.button.style.backgroundColor = this.widgetSettings.primary_color;
-    this.button.style.color = '#ffffff';
-    this.sendButton.style.backgroundColor = this.widgetSettings.primary_color;
-    this.sendButton.style.color = '#ffffff';
+    const primaryColor = this.widgetSettings.primary_color;
+
+    // Update button styles
+    this.applyStyles(this.button, {
+      ...this.getStyle('button'),
+      backgroundColor: primaryColor,
+      color: '#ffffff'
+    });
+
+    // Update send button styles
+    this.applyStyles(this.sendButton, {
+      ...this.getStyle('sendButton'),
+      backgroundColor: primaryColor,
+      color: '#ffffff'
+    });
 
     // Update header with business name
     this.header.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${this.widgetSettings.primary_color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
       </svg>
       <div>
-        <div style="font-weight: 600; color: ${this.widgetSettings.primary_color}">${this.widgetSettings.business_name}</div>
+        <div style="font-weight: 600; color: ${primaryColor}">${this.widgetSettings.business_name}</div>
       </div>
     `;
 
@@ -207,9 +269,13 @@ class BusinessChatPlugin {
             .map(
               (q) => `
                 <button
-                  style="display: block; width: 100%; text-align: left; padding: 8px 12px; margin: 4px 0; background: #f3f4f6; border: none; border-radius: 6px; cursor: pointer; color: #374151; transition: all 0.2s;"
-                  onmouseover="this.style.backgroundColor='${this.widgetSettings.primary_color}'; this.style.color='white';"
-                  onmouseout="this.style.backgroundColor='#f3f4f6'; this.style.color='#374151';"
+                  style="${Object.entries({
+                    ...this.getStyle('quickQuestion'),
+                    ':hover': {
+                      backgroundColor: primaryColor,
+                      color: 'white'
+                    }
+                  }).map(([k, v]) => `${k}:${v}`).join(';')}"
                   onclick="window.businessChat.sendQuickQuestion('${q.question}')"
                 >
                   ${q.question}
@@ -228,48 +294,56 @@ class BusinessChatPlugin {
       return;
     }
 
-    const { data, error } = await this.supabase
-      .from('conversations')
-      .insert({
-        widget_id: this.widgetId,
-        visitor_name: 'Visitor',
-      })
-      .select()
-      .single();
+    try {
+      const { data, error } = await this.supabase
+        .from('conversations')
+        .insert({
+          widget_id: this.widgetId,
+          visitor_name: 'Visitor',
+        })
+        .select()
+        .single();
 
-    if (error) {
+      if (error) {
+        throw error;
+      }
+
+      this.conversationId = data.id;
+      return data;
+    } catch (error) {
       console.error('Error creating conversation:', error);
-      return;
+      return null;
     }
-
-    this.conversationId = data.id;
-    return data;
   }
 
   async sendMessage(content = this.input.value.trim()) {
     if (!content || !this.supabase) return;
 
     if (!this.conversationId) {
-      await this.createConversation();
+      const conversation = await this.createConversation();
+      if (!conversation) {
+        console.error('Failed to create conversation');
+        return;
+      }
     }
 
-    if (!this.conversationId) {
-      console.error('Failed to create conversation');
-      return;
-    }
+    try {
+      const { error } = await this.supabase
+        .from('messages')
+        .insert({
+          conversation_id: this.conversationId,
+          content,
+          is_from_visitor: true,
+        });
 
-    const { error } = await this.supabase.from('messages').insert({
-      conversation_id: this.conversationId,
-      content,
-      is_from_visitor: true,
-    });
+      if (error) {
+        throw error;
+      }
 
-    if (error) {
+      this.input.value = '';
+    } catch (error) {
       console.error('Error sending message:', error);
-      return;
     }
-
-    this.input.value = '';
   }
 
   sendQuickQuestion(question) {
@@ -279,19 +353,22 @@ class BusinessChatPlugin {
   async loadMessages() {
     if (!this.conversationId || !this.supabase) return;
 
-    const { data, error } = await this.supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', this.conversationId)
-      .order('created_at', { ascending: true });
+    try {
+      const { data, error } = await this.supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', this.conversationId)
+        .order('created_at', { ascending: true });
 
-    if (error) {
+      if (error) {
+        throw error;
+      }
+
+      this.messages = data;
+      this.renderMessages();
+    } catch (error) {
       console.error('Error loading messages:', error);
-      return;
     }
-
-    this.messages = data;
-    this.renderMessages();
   }
 
   renderMessages() {
