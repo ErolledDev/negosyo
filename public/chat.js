@@ -31,7 +31,9 @@ class BusinessChatPlugin {
         alignItems: 'center',
         justifyContent: 'center',
         boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-        position: 'relative'
+        position: 'relative',
+        backgroundColor: '#3B82F6',
+        color: '#ffffff'
       },
       chatWindow: {
         display: 'none',
@@ -79,7 +81,9 @@ class BusinessChatPlugin {
         padding: '8px 16px',
         border: 'none',
         borderRadius: '6px',
-        cursor: 'pointer'
+        cursor: 'pointer',
+        backgroundColor: '#3B82F6',
+        color: '#ffffff'
       },
       unreadBadge: {
         position: 'absolute',
@@ -130,27 +134,38 @@ class BusinessChatPlugin {
     }
 
     try {
-      const { data, error } = await this.supabase
+      const { data: settings, error: settingsError } = await this.supabase
         .from('widget_settings')
-        .select(`
-          *,
-          quick_questions (
-            id,
-            question,
-            question_order
-          )
-        `)
+        .select('*')
         .eq('id', this.widgetId)
         .single();
 
-      if (error) {
-        throw error;
-      }
+      if (settingsError) throw settingsError;
 
-      this.widgetSettings = data;
+      const { data: questions, error: questionsError } = await this.supabase
+        .from('quick_questions')
+        .select('*')
+        .eq('widget_id', this.widgetId)
+        .order('question_order', { ascending: true });
+
+      if (questionsError) throw questionsError;
+
+      this.widgetSettings = {
+        ...settings,
+        quick_questions: questions || []
+      };
+
       this.updateWidgetStyles();
     } catch (error) {
       console.error('Error loading widget settings:', error);
+      // Set default values if settings can't be loaded
+      this.widgetSettings = {
+        business_name: 'Chat Support',
+        primary_color: '#3B82F6',
+        welcome_message: 'Welcome! How can we help you today?',
+        quick_questions: []
+      };
+      this.updateWidgetStyles();
     }
   }
 
@@ -226,12 +241,15 @@ class BusinessChatPlugin {
     this.container.appendChild(this.chatWindow);
     this.container.appendChild(this.button);
     document.body.appendChild(this.container);
+
+    // Initialize with default styles
+    this.updateWidgetStyles();
   }
 
   updateWidgetStyles() {
     if (!this.widgetSettings) return;
 
-    const primaryColor = this.widgetSettings.primary_color;
+    const primaryColor = this.widgetSettings.primary_color || '#3B82F6';
 
     // Update button styles
     this.applyStyles(this.button, {
@@ -253,36 +271,27 @@ class BusinessChatPlugin {
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
       </svg>
       <div>
-        <div style="font-weight: 600; color: ${primaryColor}">${this.widgetSettings.business_name}</div>
+        <div style="font-weight: 600; color: ${primaryColor}">${this.widgetSettings.business_name || 'Chat Support'}</div>
       </div>
     `;
 
     // Update welcome message and quick questions
     if (!this.conversationId) {
       const quickQuestions = this.widgetSettings.quick_questions || [];
-      quickQuestions.sort((a, b) => a.question_order - b.question_order);
 
       this.messagesContainer.innerHTML = `
         <div style="margin-bottom: 16px;">
-          <p style="margin-bottom: 12px; color: #374151;">${this.widgetSettings.welcome_message}</p>
-          ${quickQuestions
-            .map(
-              (q) => `
-                <button
-                  style="${Object.entries({
-                    ...this.getStyle('quickQuestion'),
-                    ':hover': {
-                      backgroundColor: primaryColor,
-                      color: 'white'
-                    }
-                  }).map(([k, v]) => `${k}:${v}`).join(';')}"
-                  onclick="window.businessChat.sendQuickQuestion('${q.question}')"
-                >
-                  ${q.question}
-                </button>
-              `
-            )
-            .join('')}
+          <p style="margin-bottom: 12px; color: #374151;">${this.widgetSettings.welcome_message || 'Welcome! How can we help you today?'}</p>
+          ${quickQuestions.map((q) => `
+            <button
+              onclick="window.businessChat.sendQuickQuestion('${q.question}')"
+              onmouseover="this.style.backgroundColor='${primaryColor}'; this.style.color='white';"
+              onmouseout="this.style.backgroundColor='#f3f4f6'; this.style.color='#374151';"
+              style="display: block; width: 100%; text-align: left; padding: 8px 12px; margin: 4px 0; background: #f3f4f6; border: none; border-radius: 6px; cursor: pointer; color: #374151; transition: all 0.2s;"
+            >
+              ${q.question}
+            </button>
+          `).join('')}
         </div>
       `;
     }
@@ -341,6 +350,7 @@ class BusinessChatPlugin {
       }
 
       this.input.value = '';
+      await this.loadMessages();
     } catch (error) {
       console.error('Error sending message:', error);
     }
