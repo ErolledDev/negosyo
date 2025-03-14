@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { HexColorPicker } from 'react-colorful';
-import { MessageSquare, Copy, Check, Trash, Plus } from 'lucide-react';
+import { MessageSquare, Copy, Check, Trash, Plus, Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -30,123 +30,158 @@ const WidgetSettings = () => {
   const [quickQuestions, setQuickQuestions] = useState<QuickQuestion[]>([]);
   const [isSaving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [saveStatus, setSaveStatus] = useState('');
+  const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error' | ''; message: string }>({ type: '', message: '' });
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadSettings = useCallback(async () => {
+    if (!session?.user) return;
+
+    try {
+      const { data: existingSettings, error: fetchError } = await supabase
+        .from('widget_settings')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (fetchError) throw fetchError;
+
+      if (existingSettings) {
+        setSettings(existingSettings);
+      } else {
+        const { data: newSettings, error: createError } = await supabase
+          .from('widget_settings')
+          .insert([
+            {
+              user_id: session.user.id,
+              business_name: 'Your Business',
+              primary_color: '#3B82F6',
+              welcome_message: 'Welcome! How can we help you today?',
+              fallback_message: "We're currently away but will respond as soon as possible.",
+            },
+          ])
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        if (newSettings) setSettings(newSettings);
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+      setSaveStatus({
+        type: 'error',
+        message: 'Failed to load settings. Please try again.',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [session]);
+
+  const loadQuickQuestions = useCallback(async () => {
+    if (!settings.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('quick_questions')
+        .select('*')
+        .eq('widget_id', settings.id)
+        .order('question_order');
+
+      if (error) throw error;
+      setQuickQuestions(data || []);
+    } catch (error) {
+      console.error('Error loading quick questions:', error);
+      setSaveStatus({
+        type: 'error',
+        message: 'Failed to load quick questions. Please try again.',
+      });
+    }
+  }, [settings.id]);
 
   useEffect(() => {
     if (session?.user) {
       loadSettings();
+    }
+  }, [session, loadSettings]);
+
+  useEffect(() => {
+    if (settings.id) {
       loadQuickQuestions();
     }
-  }, [session]);
-
-  const loadSettings = async () => {
-    const { data: existingSettings, error: fetchError } = await supabase
-      .from('widget_settings')
-      .select('*')
-      .eq('user_id', session?.user.id)
-      .limit(1)
-      .maybeSingle();
-
-    if (fetchError) {
-      console.error('Error loading settings:', fetchError);
-      return;
-    }
-
-    if (existingSettings) {
-      setSettings(existingSettings);
-    } else {
-      const { data: newSettings, error: createError } = await supabase
-        .from('widget_settings')
-        .insert([
-          {
-            user_id: session?.user.id,
-            business_name: 'Your Business',
-            primary_color: '#3B82F6',
-            welcome_message: 'Welcome! How can we help you today?',
-            fallback_message: "We're currently away but will respond as soon as possible.",
-          },
-        ])
-        .select()
-        .single();
-
-      if (createError) {
-        console.error('Error creating settings:', createError);
-        return;
-      }
-
-      if (newSettings) {
-        setSettings(newSettings);
-      }
-    }
-  };
-
-  const loadQuickQuestions = async () => {
-    const { data, error } = await supabase
-      .from('quick_questions')
-      .select('*')
-      .order('question_order');
-
-    if (error) {
-      console.error('Error loading quick questions:', error);
-      return;
-    }
-
-    setQuickQuestions(data || []);
-  };
+  }, [settings.id, loadQuickQuestions]);
 
   const saveSettings = async () => {
     setSaving(true);
-    setSaveStatus('Saving...');
+    setSaveStatus({ type: '', message: '' });
 
-    const { error } = await supabase
-      .from('widget_settings')
-      .upsert({
-        ...settings,
-        user_id: session?.user.id,
+    try {
+      const { error } = await supabase
+        .from('widget_settings')
+        .upsert({
+          ...settings,
+          user_id: session?.user.id,
+        });
+
+      if (error) throw error;
+
+      setSaveStatus({
+        type: 'success',
+        message: 'Settings saved successfully!',
       });
 
-    if (error) {
+      // Reload settings to ensure we have the latest data
+      await loadSettings();
+    } catch (error) {
       console.error('Error saving settings:', error);
-      setSaveStatus('Error saving settings');
-    } else {
-      setSaveStatus('Settings saved successfully!');
-      setTimeout(() => setSaveStatus(''), 3000);
+      setSaveStatus({
+        type: 'error',
+        message: 'Failed to save settings. Please try again.',
+      });
+    } finally {
+      setSaving(false);
+      setTimeout(() => {
+        setSaveStatus({ type: '', message: '' });
+      }, 3000);
     }
-
-    setSaving(false);
   };
 
   const handleQuickQuestionChange = async (index: number, value: string) => {
     const updatedQuestions = [...quickQuestions];
     
-    if (index >= updatedQuestions.length) {
-      const { error } = await supabase
-        .from('quick_questions')
-        .insert({
-          widget_id: settings.id,
-          question: value,
-          question_order: index,
-        });
+    try {
+      if (index >= updatedQuestions.length) {
+        const { error } = await supabase
+          .from('quick_questions')
+          .insert({
+            widget_id: settings.id,
+            question: value,
+            question_order: index,
+          });
 
-      if (error) {
-        console.error('Error adding quick question:', error);
-        return;
-      }
-    } else {
-      const question = updatedQuestions[index];
-      const { error } = await supabase
-        .from('quick_questions')
-        .update({ question: value })
-        .eq('id', question.id);
+        if (error) throw error;
+      } else {
+        const question = updatedQuestions[index];
+        const { error } = await supabase
+          .from('quick_questions')
+          .update({ question: value })
+          .eq('id', question.id);
 
-      if (error) {
-        console.error('Error updating quick question:', error);
-        return;
+        if (error) throw error;
       }
+
+      await loadQuickQuestions();
+      setSaveStatus({
+        type: 'success',
+        message: 'Quick question saved successfully!',
+      });
+    } catch (error) {
+      console.error('Error updating quick question:', error);
+      setSaveStatus({
+        type: 'error',
+        message: 'Failed to save quick question. Please try again.',
+      });
     }
-
-    loadQuickQuestions();
   };
 
   const addQuickQuestion = () => {
@@ -154,17 +189,26 @@ const WidgetSettings = () => {
   };
 
   const deleteQuickQuestion = async (id: string) => {
-    const { error } = await supabase
-      .from('quick_questions')
-      .delete()
-      .eq('id', id);
+    try {
+      const { error } = await supabase
+        .from('quick_questions')
+        .delete()
+        .eq('id', id);
 
-    if (error) {
+      if (error) throw error;
+
+      await loadQuickQuestions();
+      setSaveStatus({
+        type: 'success',
+        message: 'Quick question deleted successfully!',
+      });
+    } catch (error) {
       console.error('Error deleting quick question:', error);
-      return;
+      setSaveStatus({
+        type: 'error',
+        message: 'Failed to delete quick question. Please try again.',
+      });
     }
-
-    loadQuickQuestions();
   };
 
   const copyInstallCode = () => {
@@ -179,6 +223,17 @@ const WidgetSettings = () => {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center space-x-2 text-gray-600">
+          <Loader2 className="w-6 h-6 animate-spin" />
+          <span>Loading settings...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -197,7 +252,7 @@ const WidgetSettings = () => {
                     <button
                       type="button"
                       onClick={() => setShowColorPicker(!showColorPicker)}
-                      className="w-full h-10 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full h-10 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
                       style={{ backgroundColor: settings.primary_color }}
                     />
                     {showColorPicker && (
@@ -208,7 +263,9 @@ const WidgetSettings = () => {
                         />
                         <HexColorPicker
                           color={settings.primary_color}
-                          onChange={(color) => setSettings({ ...settings, primary_color: color })}
+                          onChange={(color) => {
+                            setSettings({ ...settings, primary_color: color });
+                          }}
                         />
                       </div>
                     )}
@@ -223,7 +280,7 @@ const WidgetSettings = () => {
                     type="text"
                     value={settings.business_name}
                     onChange={(e) => setSettings({ ...settings, business_name: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-shadow"
                   />
                 </div>
               </div>
@@ -240,7 +297,7 @@ const WidgetSettings = () => {
                     value={settings.welcome_message}
                     onChange={(e) => setSettings({ ...settings, welcome_message: e.target.value })}
                     rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-shadow"
                   />
                 </div>
 
@@ -252,7 +309,7 @@ const WidgetSettings = () => {
                     value={settings.fallback_message}
                     onChange={(e) => setSettings({ ...settings, fallback_message: e.target.value })}
                     rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-shadow"
                   />
                 </div>
               </div>
@@ -263,7 +320,7 @@ const WidgetSettings = () => {
                 <h3 className="text-lg font-medium text-gray-900">Quick Action Questions</h3>
                 <button
                   onClick={addQuickQuestion}
-                  className="flex items-center space-x-1 text-blue-600 hover:text-blue-500"
+                  className="flex items-center space-x-1 text-blue-600 hover:text-blue-500 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                   <span>Add Question</span>
@@ -277,12 +334,12 @@ const WidgetSettings = () => {
                       value={question.question}
                       onChange={(e) => handleQuickQuestionChange(index, e.target.value)}
                       placeholder={`Question ${index + 1}`}
-                      className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-shadow"
                     />
                     {question.id && (
                       <button
                         onClick={() => deleteQuickQuestion(question.id)}
-                        className="p-2 text-gray-400 hover:text-red-500"
+                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                       >
                         <Trash className="h-4 w-4" />
                       </button>
@@ -296,12 +353,28 @@ const WidgetSettings = () => {
               <button
                 onClick={saveSettings}
                 disabled={isSaving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isSaving ? 'Saving...' : 'Save Settings'}
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Settings'
+                )}
               </button>
-              {saveStatus && (
-                <span className="text-sm text-gray-600">{saveStatus}</span>
+              {saveStatus.message && (
+                <div className={`flex items-center space-x-2 text-sm ${
+                  saveStatus.type === 'success' ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {saveStatus.type === 'error' ? (
+                    <AlertCircle className="w-4 h-4" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  <span>{saveStatus.message}</span>
+                </div>
               )}
             </div>
           </div>
@@ -309,7 +382,7 @@ const WidgetSettings = () => {
           <div className="space-y-8">
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Widget Preview</h3>
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-lg overflow-hidden shadow-sm">
                 <div
                   className="p-4"
                   style={{ backgroundColor: settings.primary_color }}
@@ -344,7 +417,7 @@ const WidgetSettings = () => {
                 <h3 className="text-lg font-medium text-gray-900">Installation Code</h3>
                 <button
                   onClick={copyInstallCode}
-                  className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-500"
+                  className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-500 transition-colors"
                 >
                   {copied ? (
                     <Check className="h-4 w-4" />

@@ -28,80 +28,144 @@ class BusinessChatPlugin {
         fontFamily: 'system-ui, -apple-system, sans-serif'
       },
       button: {
-        width: '60px',
-        height: '60px',
-        borderRadius: '50%',
+        width: '56px',
+        height: '56px',
+        borderRadius: '28px',
         border: 'none',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
         position: 'relative',
         backgroundColor: '#3B82F6',
-        color: '#ffffff'
+        color: '#ffffff',
+        transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+        outline: 'none'
       },
       chatWindow: {
         display: 'none',
         position: 'absolute',
         bottom: '80px',
         right: '0',
-        width: '350px',
-        height: '500px',
+        width: '380px',
+        height: '600px',
         backgroundColor: '#fff',
-        borderRadius: '12px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        borderRadius: '16px',
+        boxShadow: '0 4px 24px rgba(0, 0, 0, 0.15)',
         overflow: 'hidden',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        transition: 'opacity 0.3s ease-in-out, transform 0.3s ease-in-out',
+        opacity: '0',
+        transform: 'translateY(20px)',
+        border: '1px solid rgba(0, 0, 0, 0.1)'
       },
       header: {
-        padding: '16px',
-        borderBottom: '1px solid #e5e7eb',
+        padding: '16px 20px',
+        borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
         display: 'flex',
         alignItems: 'center',
-        gap: '8px'
+        gap: '12px',
+        backgroundColor: '#fff'
       },
       messagesContainer: {
         flex: '1',
         overflowY: 'auto',
-        padding: '16px'
+        padding: '20px',
+        scrollBehavior: 'smooth',
+        backgroundColor: '#f8fafc'
       },
       inputContainer: {
-        padding: '16px',
-        borderTop: '1px solid #e5e7eb',
+        padding: '16px 20px',
+        borderTop: '1px solid rgba(0, 0, 0, 0.1)',
         display: 'flex',
-        gap: '8px',
+        gap: '12px',
         backgroundColor: '#fff',
         position: 'relative',
         zIndex: '1'
       },
       input: {
         flex: '1',
-        padding: '8px 12px',
-        border: '1px solid #e5e7eb',
-        borderRadius: '6px',
+        padding: '12px 16px',
+        border: '1px solid rgba(0, 0, 0, 0.1)',
+        borderRadius: '24px',
         outline: 'none',
-        backgroundColor: '#fff'
+        backgroundColor: '#fff',
+        fontSize: '14px',
+        transition: 'border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out'
       },
       sendButton: {
-        padding: '8px 16px',
+        padding: '12px',
         border: 'none',
-        borderRadius: '6px',
+        borderRadius: '24px',
         cursor: 'pointer',
         backgroundColor: '#3B82F6',
-        color: '#ffffff'
+        color: '#ffffff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'background-color 0.2s ease-in-out, transform 0.2s ease-in-out',
+        outline: 'none'
       },
       unreadBadge: {
         position: 'absolute',
-        top: '-5px',
-        right: '-5px',
+        top: '-6px',
+        right: '-6px',
         backgroundColor: '#ef4444',
         color: 'white',
-        borderRadius: '9999px',
+        borderRadius: '12px',
         padding: '2px 6px',
         fontSize: '12px',
-        fontWeight: 'bold',
-        display: 'none'
+        fontWeight: '600',
+        display: 'none',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+        border: '2px solid #fff',
+        minWidth: '20px',
+        height: '20px',
+        textAlign: 'center',
+        lineHeight: '16px'
+      },
+      message: {
+        maxWidth: '70%',
+        padding: '12px 16px',
+        borderRadius: '16px',
+        fontSize: '14px',
+        lineHeight: '1.5',
+        position: 'relative',
+        marginBottom: '12px'
+      },
+      visitorMessage: {
+        backgroundColor: '#fff',
+        color: '#1f2937',
+        marginLeft: 'auto',
+        borderTopRightRadius: '4px',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)'
+      },
+      agentMessage: {
+        backgroundColor: '#3B82F6',
+        color: '#fff',
+        marginRight: 'auto',
+        borderTopLeftRadius: '4px'
+      },
+      quickQuestion: {
+        display: 'block',
+        width: '100%',
+        padding: '12px 16px',
+        marginBottom: '8px',
+        backgroundColor: '#fff',
+        border: '1px solid rgba(0, 0, 0, 0.1)',
+        borderRadius: '12px',
+        cursor: 'pointer',
+        textAlign: 'left',
+        fontSize: '14px',
+        color: '#374151',
+        transition: 'all 0.2s ease-in-out'
+      },
+      timestamp: {
+        fontSize: '11px',
+        opacity: '0.7',
+        marginTop: '4px',
+        display: 'block'
       }
     };
 
@@ -113,6 +177,40 @@ class BusinessChatPlugin {
     await this.initSupabase();
     await this.loadSettings();
     this.subscribeToMessages();
+    this.addEventListeners();
+  }
+
+  addEventListeners() {
+    // Add hover effects for the chat button
+    this.elements.button.addEventListener('mouseenter', () => {
+      this.elements.button.style.transform = 'scale(1.05)';
+      this.elements.button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+    });
+
+    this.elements.button.addEventListener('mouseleave', () => {
+      this.elements.button.style.transform = 'scale(1)';
+      this.elements.button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+    });
+
+    // Add focus styles for the input
+    this.elements.input.addEventListener('focus', () => {
+      this.elements.input.style.borderColor = this.widgetSettings.primary_color;
+      this.elements.input.style.boxShadow = `0 0 0 3px ${this.widgetSettings.primary_color}25`;
+    });
+
+    this.elements.input.addEventListener('blur', () => {
+      this.elements.input.style.borderColor = 'rgba(0, 0, 0, 0.1)';
+      this.elements.input.style.boxShadow = 'none';
+    });
+
+    // Add hover effect for the send button
+    this.elements.sendButton.addEventListener('mouseenter', () => {
+      this.elements.sendButton.style.transform = 'scale(1.05)';
+    });
+
+    this.elements.sendButton.addEventListener('mouseleave', () => {
+      this.elements.sendButton.style.transform = 'scale(1)';
+    });
   }
 
   async initSupabase() {
@@ -155,52 +253,44 @@ class BusinessChatPlugin {
     }
   }
 
-  getStyle(element) {
-    return { ...this.styles[element] };
-  }
-
-  applyStyles(element, styles) {
-    if (!element || !element.style) return;
-    Object.assign(element.style, styles);
-  }
-
   createWidget() {
     // Create widget container
     this.elements.container = document.createElement('div');
     this.elements.container.id = 'business-chat-widget';
-    this.applyStyles(this.elements.container, this.getStyle('container'));
+    this.applyStyles(this.elements.container, this.styles.container);
 
     // Create widget button
     this.elements.button = document.createElement('button');
-    this.applyStyles(this.elements.button, this.getStyle('button'));
+    this.applyStyles(this.elements.button, this.styles.button);
     this.elements.button.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
       </svg>
     `;
+    this.elements.button.setAttribute('aria-label', 'Open chat');
     this.elements.button.onclick = () => this.toggleWidget();
 
     // Create chat window
     this.elements.chatWindow = document.createElement('div');
-    this.applyStyles(this.elements.chatWindow, this.getStyle('chatWindow'));
+    this.applyStyles(this.elements.chatWindow, this.styles.chatWindow);
 
     // Create header
     this.elements.header = document.createElement('div');
-    this.applyStyles(this.elements.header, this.getStyle('header'));
+    this.applyStyles(this.elements.header, this.styles.header);
 
     // Create messages container
     this.elements.messagesContainer = document.createElement('div');
-    this.applyStyles(this.elements.messagesContainer, this.getStyle('messagesContainer'));
+    this.applyStyles(this.elements.messagesContainer, this.styles.messagesContainer);
 
     // Create input container
     this.elements.inputContainer = document.createElement('div');
-    this.applyStyles(this.elements.inputContainer, this.getStyle('inputContainer'));
+    this.applyStyles(this.elements.inputContainer, this.styles.inputContainer);
 
     // Create message input
     this.elements.input = document.createElement('input');
     this.elements.input.type = 'text';
     this.elements.input.placeholder = 'Type your message...';
-    this.applyStyles(this.elements.input, this.getStyle('input'));
+    this.applyStyles(this.elements.input, this.styles.input);
     this.elements.input.onkeypress = (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -210,13 +300,19 @@ class BusinessChatPlugin {
 
     // Create send button
     this.elements.sendButton = document.createElement('button');
-    this.elements.sendButton.innerHTML = 'Send';
-    this.applyStyles(this.elements.sendButton, this.getStyle('sendButton'));
+    this.elements.sendButton.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    `;
+    this.elements.sendButton.setAttribute('aria-label', 'Send message');
+    this.applyStyles(this.elements.sendButton, this.styles.sendButton);
     this.elements.sendButton.onclick = () => this.sendMessage();
 
     // Create unread badge
     this.elements.unreadBadge = document.createElement('div');
-    this.applyStyles(this.elements.unreadBadge, this.getStyle('unreadBadge'));
+    this.applyStyles(this.elements.unreadBadge, this.styles.unreadBadge);
     this.elements.button.appendChild(this.elements.unreadBadge);
 
     // Assemble the widget
@@ -237,26 +333,31 @@ class BusinessChatPlugin {
 
     // Update button styles
     this.applyStyles(this.elements.button, {
-      ...this.getStyle('button'),
-      backgroundColor: primaryColor,
-      color: '#ffffff'
+      ...this.styles.button,
+      backgroundColor: primaryColor
     });
 
     // Update send button styles
     this.applyStyles(this.elements.sendButton, {
-      ...this.getStyle('sendButton'),
-      backgroundColor: primaryColor,
-      color: '#ffffff'
+      ...this.styles.sendButton,
+      backgroundColor: primaryColor
     });
 
     // Update header with business name
     if (this.elements.header) {
       this.elements.header.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
-        <div>
-          <div style="font-weight: 600; color: ${primaryColor}">${this.widgetSettings.business_name || 'Chat Support'}</div>
+        <div class="chat-header" style="display: flex; align-items: center; gap: 12px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <div style="flex: 1;">
+            <div style="font-weight: 600; color: ${primaryColor}; font-size: 16px;">
+              ${this.widgetSettings.business_name || 'Chat Support'}
+            </div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
+              We typically reply within a few minutes
+            </div>
+          </div>
         </div>
       `;
     }
@@ -267,18 +368,36 @@ class BusinessChatPlugin {
       const welcomeMessage = this.widgetSettings.welcome_message || 'Welcome! How can we help you today?';
 
       this.elements.messagesContainer.innerHTML = `
-        <div style="margin-bottom: 16px;">
-          <p style="margin-bottom: 12px; color: #374151;">${welcomeMessage}</p>
-          ${quickQuestions.map((q) => `
-            <button
-              onclick="window.businessChat.sendQuickQuestion('${q.question}')"
-              onmouseover="this.style.backgroundColor='${primaryColor}'; this.style.color='white';"
-              onmouseout="this.style.backgroundColor='#f3f4f6'; this.style.color='#374151';"
-              style="display: block; width: 100%; text-align: left; padding: 8px 12px; margin: 4px 0; background: #f3f4f6; border: none; border-radius: 6px; cursor: pointer; color: #374151; transition: all 0.2s;"
-            >
-              ${q.question}
-            </button>
-          `).join('')}
+        <div style="margin-bottom: 20px;">
+          <div style="background-color: #fff; padding: 16px; border-radius: 16px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); color: #1f2937; font-size: 15px; line-height: 1.5;">
+            ${welcomeMessage}
+          </div>
+          <div style="margin-top: 20px;">
+            ${quickQuestions.map((q) => `
+              <button
+                onclick="window.businessChat.sendQuickQuestion('${q.question}')"
+                class="quick-question"
+                style="
+                  display: block;
+                  width: 100%;
+                  padding: 12px 16px;
+                  margin-bottom: 8px;
+                  background-color: #fff;
+                  border: 1px solid rgba(0, 0, 0, 0.1);
+                  border-radius: 12px;
+                  cursor: pointer;
+                  text-align: left;
+                  font-size: 14px;
+                  color: #374151;
+                  transition: all 0.2s ease-in-out;
+                "
+                onmouseover="this.style.backgroundColor='${primaryColor}'; this.style.color='white'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 6px rgba(0, 0, 0, 0.05)';"
+                onmouseout="this.style.backgroundColor='#fff'; this.style.color='#374151'; this.style.transform='translateY(0)'; this.style.boxShadow='none';"
+              >
+                ${q.question}
+              </button>
+            `).join('')}
+          </div>
         </div>
       `;
     }
@@ -330,6 +449,7 @@ class BusinessChatPlugin {
           conversation_id: this.conversationId,
           content,
           is_from_visitor: true,
+          type: 'message'
         });
 
       if (error) {
@@ -368,33 +488,50 @@ class BusinessChatPlugin {
     }
   }
 
+  formatTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
+  }
+
   renderMessages() {
     if (!this.widgetSettings || !this.elements.messagesContainer) return;
 
     this.elements.messagesContainer.innerHTML = this.messages
-      .map(
-        (message) => `
+      .map((message) => {
+        const isVisitor = message.is_from_visitor;
+        const messageStyles = {
+          ...this.styles.message,
+          ...(isVisitor ? this.styles.visitorMessage : this.styles.agentMessage)
+        };
+
+        return `
           <div style="
             display: flex;
-            justify-content: ${message.is_from_visitor ? 'flex-end' : 'flex-start'};
-            margin-bottom: 12px;
+            justify-content: ${isVisitor ? 'flex-end' : 'flex-start'};
+            margin-bottom: 16px;
           ">
-            <div style="
-              max-width: 70%;
-              padding: 8px 12px;
-              border-radius: 12px;
-              background-color: ${
-                message.is_from_visitor
-                  ? this.widgetSettings.primary_color
-                  : '#f3f4f6'
-              };
-              color: ${message.is_from_visitor ? '#ffffff' : '#374151'};
-            ">
+            <div style="${Object.entries(messageStyles)
+              .map(([key, value]) => `${key.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${value}`)
+              .join(';')}">
               ${message.content}
+              <span style="${Object.entries(this.styles.timestamp)
+                .map(([key, value]) => `${key.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${value}`)
+                .join(';')}">
+                ${this.formatTimestamp(message.created_at)}
+              </span>
             </div>
           </div>
-        `
-      )
+        `;
+      })
       .join('');
 
     this.elements.messagesContainer.scrollTop = this.elements.messagesContainer.scrollHeight;
@@ -436,7 +573,9 @@ class BusinessChatPlugin {
     if (!this.elements.unreadBadge) return;
 
     if (this.unreadCount > 0) {
-      this.elements.unreadBadge.style.display = 'block';
+      this.elements.unreadBadge.style.display = 'flex';
+      this.elements.unreadBadge.style.alignItems = 'center';
+      this.elements.unreadBadge.style.justifyContent = 'center';
       this.elements.unreadBadge.textContent = this.unreadCount;
     } else {
       this.elements.unreadBadge.style.display = 'none';
@@ -447,6 +586,16 @@ class BusinessChatPlugin {
     this.isOpen = !this.isOpen;
     if (this.elements.chatWindow) {
       this.elements.chatWindow.style.display = this.isOpen ? 'flex' : 'none';
+      if (this.isOpen) {
+        // Add a small delay to ensure the display change has taken effect
+        setTimeout(() => {
+          this.elements.chatWindow.style.opacity = '1';
+          this.elements.chatWindow.style.transform = 'translateY(0)';
+        }, 50);
+      } else {
+        this.elements.chatWindow.style.opacity = '0';
+        this.elements.chatWindow.style.transform = 'translateY(20px)';
+      }
     }
     if (this.isOpen) {
       this.unreadCount = 0;
@@ -456,6 +605,11 @@ class BusinessChatPlugin {
         this.elements.input.focus();
       }
     }
+  }
+
+  applyStyles(element, styles) {
+    if (!element || !element.style) return;
+    Object.assign(element.style, styles);
   }
 }
 
