@@ -8,12 +8,7 @@ class BusinessChatPlugin {
     this.widgetId = config.uid;
     this.supabaseUrl = 'https://tkimzusnrpcbxrtliyji.supabase.co';
     this.supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRraW16dXNucnBjYnhydGxpeWppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE4Nzc2NTksImV4cCI6MjA1NzQ1MzY1OX0.OMFJ9WHQQR3aUrq4zNb-Rs1K0teeJkCBI5AHIvMFn3s';
-    this.widgetSettings = {
-      business_name: 'Chat Support',
-      primary_color: '#3B82F6',
-      welcome_message: 'Welcome! How can we help you today?',
-      quick_questions: []
-    };
+    this.widgetSettings = null;
     this.conversationId = null;
     this.messages = [];
     this.isOpen = false;
@@ -178,22 +173,6 @@ class BusinessChatPlugin {
         fontSize: '11px',
         color: '#6b7280',
         marginTop: '4px'
-      },
-      typingIndicator: {
-        display: 'flex',
-        alignItems: 'center',
-        padding: '8px 12px',
-        backgroundColor: '#f3f4f6',
-        borderRadius: '12px',
-        margin: '8px 0',
-        gap: '4px'
-      },
-      typingDot: {
-        width: '6px',
-        height: '6px',
-        backgroundColor: '#9ca3af',
-        borderRadius: '50%',
-        animation: 'typing 1s infinite'
       }
     };
 
@@ -205,78 +184,6 @@ class BusinessChatPlugin {
     await this.initSupabase();
     await this.loadSettings();
     this.subscribeToMessages();
-    this.addEventListeners();
-    this.addTypingAnimation();
-  }
-
-  addTypingAnimation() {
-    const styleSheet = document.createElement('style');
-    styleSheet.textContent = `
-      @keyframes typing {
-        0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-4px); }
-      }
-    `;
-    document.head.appendChild(styleSheet);
-  }
-
-  addEventListeners() {
-    // Add hover effects for the chat button
-    this.elements.button.addEventListener('mouseenter', () => {
-      this.elements.button.style.transform = 'scale(1.05)';
-      this.elements.button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
-    });
-
-    this.elements.button.addEventListener('mouseleave', () => {
-      this.elements.button.style.transform = 'scale(1)';
-      this.elements.button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-    });
-
-    // Add focus styles for the input
-    this.elements.input.addEventListener('focus', () => {
-      this.elements.input.style.borderColor = this.widgetSettings.primary_color;
-      this.elements.input.style.boxShadow = `0 0 0 3px ${this.widgetSettings.primary_color}25`;
-    });
-
-    this.elements.input.addEventListener('blur', () => {
-      this.elements.input.style.borderColor = 'rgba(0, 0, 0, 0.1)';
-      this.elements.input.style.boxShadow = 'none';
-    });
-
-    // Add hover effect for the send button
-    this.elements.sendButton.addEventListener('mouseenter', () => {
-      this.elements.sendButton.style.transform = 'scale(1.05)';
-      this.elements.sendButton.style.backgroundColor = this.adjustColor(this.widgetSettings.primary_color, -20);
-    });
-
-    this.elements.sendButton.addEventListener('mouseleave', () => {
-      this.elements.sendButton.style.transform = 'scale(1)';
-      this.elements.sendButton.style.backgroundColor = this.widgetSettings.primary_color;
-    });
-
-    // Add hover effects for quick questions
-    document.querySelectorAll('.quick-question').forEach(button => {
-      button.addEventListener('mouseenter', () => {
-        button.style.backgroundColor = this.widgetSettings.primary_color;
-        button.style.color = 'white';
-        button.style.transform = 'translateY(-1px)';
-      });
-
-      button.addEventListener('mouseleave', () => {
-        button.style.backgroundColor = '#fff';
-        button.style.color = '#374151';
-        button.style.transform = 'translateY(0)';
-      });
-    });
-  }
-
-  adjustColor(color, amount) {
-    const hex = color.replace('#', '');
-    const num = parseInt(hex, 16);
-    const r = Math.min(255, Math.max(0, (num >> 16) + amount));
-    const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount));
-    const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount));
-    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
   }
 
   async initSupabase() {
@@ -313,17 +220,53 @@ class BusinessChatPlugin {
       };
 
       this.updateWidgetStyles();
+      if (!this.conversationId) {
+        this.showWelcomeMessage();
+      }
     } catch (error) {
-      console.error('Error loading widget settings:', error);
-      this.updateWidgetStyles();
+      console.error('Error loading settings:', error);
     }
+  }
+
+  showWelcomeMessage() {
+    if (!this.widgetSettings || !this.elements.messagesContainer) return;
+
+    const welcomeMessage = {
+      id: 'welcome',
+      content: this.widgetSettings.welcome_message,
+      is_from_visitor: false,
+      created_at: new Date().toISOString(),
+      type: 'welcome'
+    };
+
+    this.messages = [welcomeMessage];
+    this.renderMessages();
+    this.renderQuickQuestions();
+  }
+
+  renderQuickQuestions() {
+    if (!this.widgetSettings?.quick_questions?.length || !this.elements.messagesContainer) return;
+
+    const quickQuestionsContainer = document.createElement('div');
+    quickQuestionsContainer.className = 'quick-questions';
+    quickQuestionsContainer.style.marginTop = '20px';
+
+    this.widgetSettings.quick_questions.forEach((q) => {
+      const button = document.createElement('button');
+      button.className = 'quick-question';
+      button.textContent = q.question;
+      button.onclick = () => this.sendQuickQuestion(q.question);
+      this.applyStyles(button, this.styles.quickQuestion);
+      quickQuestionsContainer.appendChild(button);
+    });
+
+    this.elements.messagesContainer.appendChild(quickQuestionsContainer);
   }
 
   createWidget() {
     // Create widget container
     this.elements.container = document.createElement('div');
-    this.elements.container.id = 
-    'business-chat-widget';
+    this.elements.container.id = 'business-chat-widget';
     this.applyStyles(this.elements.container, this.styles.container);
 
     // Create widget button
@@ -431,46 +374,6 @@ class BusinessChatPlugin {
         </div>
       `;
     }
-
-    // Update welcome message and quick questions
-    if (!this.conversationId && this.elements.messagesContainer) {
-      const quickQuestions = this.widgetSettings.quick_questions || [];
-      const welcomeMessage = this.widgetSettings.welcome_message || 'Welcome! How can we help you today?';
-
-      this.elements.messagesContainer.innerHTML = `
-        <div style="margin-bottom: 20px;">
-          <div style="background-color: #fff; padding: 16px; border-radius: 16px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); color: #1f2937; font-size: 15px; line-height: 1.5;">
-            ${welcomeMessage}
-          </div>
-          <div style="margin-top: 20px;">
-            ${quickQuestions.map((q) => `
-              <button
-                onclick="window.businessChat.sendQuickQuestion('${q.question}')"
-                class="quick-question"
-                style="
-                  display: block;
-                  width: 100%;
-                  padding: 12px 16px;
-                  margin-bottom: 8px;
-                  background-color: #fff;
-                  border: 1px solid rgba(0, 0, 0, 0.1);
-                  border-radius: 12px;
-                  cursor: pointer;
-                  text-align: left;
-                  font-size: 14px;
-                  color: #374151;
-                  transition: all 0.2s ease-in-out;
-                "
-                onmouseover="this.style.backgroundColor='${primaryColor}'; this.style.color='white'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 6px rgba(0, 0, 0, 0.05)';"
-                onmouseout="this.style.backgroundColor='#fff'; this.style.color='#374151'; this.style.transform='translateY(0)'; this.style.boxShadow='none';"
-              >
-                ${q.question}
-              </button>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    }
   }
 
   async createConversation() {
@@ -489,9 +392,7 @@ class BusinessChatPlugin {
         .select()
         .single();
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       this.conversationId = data.id;
       return data;
@@ -499,25 +400,6 @@ class BusinessChatPlugin {
       console.error('Error creating conversation:', error);
       return null;
     }
-  }
-
-  showTypingIndicator() {
-    const typingIndicator = document.createElement('div');
-    this.applyStyles(typingIndicator, this.styles.typingIndicator);
-    
-    for (let i = 0; i < 3; i++) {
-      const dot = document.createElement('div');
-      this.applyStyles(dot, {
-        ...this.styles.typingDot,
-        animationDelay: `${i * 0.2}s`
-      });
-      typingIndicator.appendChild(dot);
-    }
-    
-    this.elements.messagesContainer.appendChild(typingIndicator);
-    this.scrollToBottom();
-    
-    return typingIndicator;
   }
 
   async sendMessage(content = this.elements.input.value.trim()) {
@@ -538,12 +420,11 @@ class BusinessChatPlugin {
           conversation_id: this.conversationId,
           content,
           is_from_visitor: true,
-          type: 'message'
+          type: 'message',
+          status: 'sent'
         });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       this.elements.input.value = '';
       await this.loadMessages();
@@ -566,9 +447,7 @@ class BusinessChatPlugin {
         .eq('conversation_id', this.conversationId)
         .order('created_at', { ascending: true });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       this.messages = data;
       this.renderMessages();
@@ -592,7 +471,7 @@ class BusinessChatPlugin {
   }
 
   renderMessages() {
-    if (!this.widgetSettings || !this.elements.messagesContainer) return;
+    if (!this.elements.messagesContainer) return;
 
     this.elements.messagesContainer.innerHTML = this.messages
       .map((message) => {
@@ -626,6 +505,11 @@ class BusinessChatPlugin {
       .join('');
 
     this.scrollToBottom();
+
+    // Re-render quick questions if no messages except welcome
+    if (this.messages.length === 1 && this.messages[0].type === 'welcome') {
+      this.renderQuickQuestions();
+    }
   }
 
   subscribeToMessages() {
@@ -644,13 +528,10 @@ class BusinessChatPlugin {
           table: 'messages',
         },
         (payload) => {
-          if (
-            payload.new.conversation_id === this.conversationId &&
-            !payload.new.is_from_visitor
-          ) {
+          if (payload.new.conversation_id === this.conversationId) {
             this.messages.push(payload.new);
             this.renderMessages();
-            if (!this.isOpen) {
+            if (!this.isOpen && !payload.new.is_from_visitor) {
               this.unreadCount++;
               this.updateUnreadBadge();
             }
@@ -678,10 +559,14 @@ class BusinessChatPlugin {
     if (this.elements.chatWindow) {
       this.elements.chatWindow.style.display = this.isOpen ? 'flex' : 'none';
       if (this.isOpen) {
-        // Add a small delay to ensure the display change has taken effect
         setTimeout(() => {
           this.elements.chatWindow.style.opacity = '1';
           this.elements.chatWindow.style.transform = 'translateY(0)';
+          if (!this.conversationId) {
+            this.showWelcomeMessage();
+          } else {
+            this.loadMessages();
+          }
         }, 50);
       } else {
         this.elements.chatWindow.style.opacity = '0';
@@ -691,7 +576,6 @@ class BusinessChatPlugin {
     if (this.isOpen) {
       this.unreadCount = 0;
       this.updateUnreadBadge();
-      this.loadMessages();
       if (this.elements.input) {
         this.elements.input.focus();
       }
