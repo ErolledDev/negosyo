@@ -16,6 +16,7 @@ interface QuickQuestion {
   id: string;
   question: string;
   question_order: number;
+  isNew?: boolean;
 }
 
 const WidgetSettings = () => {
@@ -148,29 +149,46 @@ const WidgetSettings = () => {
 
   const handleQuickQuestionChange = async (index: number, value: string) => {
     const updatedQuestions = [...quickQuestions];
+    const question = updatedQuestions[index];
     
     try {
-      if (index >= updatedQuestions.length) {
-        const { error } = await supabase
+      if (!question.id || question.isNew) {
+        // This is a new question that needs to be inserted
+        const { data, error } = await supabase
           .from('quick_questions')
           .insert({
             widget_id: settings.id,
             question: value,
             question_order: index,
-          });
+          })
+          .select()
+          .single();
 
         if (error) throw error;
+        
+        // Update the local state with the new question data
+        updatedQuestions[index] = {
+          ...data,
+          isNew: false
+        };
+        setQuickQuestions(updatedQuestions);
       } else {
-        const question = updatedQuestions[index];
+        // This is an existing question that needs to be updated
         const { error } = await supabase
           .from('quick_questions')
           .update({ question: value })
           .eq('id', question.id);
 
         if (error) throw error;
+        
+        // Update the local state
+        updatedQuestions[index] = {
+          ...question,
+          question: value
+        };
+        setQuickQuestions(updatedQuestions);
       }
 
-      await loadQuickQuestions();
       setSaveStatus({
         type: 'success',
         message: 'Quick question saved successfully!',
@@ -185,7 +203,15 @@ const WidgetSettings = () => {
   };
 
   const addQuickQuestion = () => {
-    setQuickQuestions([...quickQuestions, { id: '', question: '', question_order: quickQuestions.length }]);
+    setQuickQuestions([
+      ...quickQuestions,
+      {
+        id: '',
+        question: '',
+        question_order: quickQuestions.length,
+        isNew: true
+      }
+    ]);
   };
 
   const deleteQuickQuestion = async (id: string) => {
