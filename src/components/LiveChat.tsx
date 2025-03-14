@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { MoreVertical, Pin, User, Search, Trash, Archive, Send, MessageSquare } from 'lucide-react';
+import { MoreVertical, Pin, User, Search, Trash, Archive, Send, MessageSquare, Clock, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -14,6 +14,7 @@ interface Conversation {
     is_from_visitor: boolean;
   };
   unread_count: number;
+  status: 'online' | 'away' | 'offline';
 }
 
 interface Message {
@@ -21,6 +22,7 @@ interface Message {
   content: string;
   is_from_visitor: boolean;
   created_at: string;
+  type: 'message' | 'welcome' | 'quick_question';
 }
 
 const LiveChat = () => {
@@ -33,6 +35,9 @@ const LiveChat = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [widgetId, setWidgetId] = useState<string | null>(null);
+  const [widgetSettings, setWidgetSettings] = useState<any>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
   const loadConversations = useCallback(async () => {
     if (!widgetId) return;
@@ -45,7 +50,8 @@ const LiveChat = () => {
           content,
           created_at,
           is_from_visitor,
-          read
+          read,
+          type
         )
       `)
       .eq('widget_id', widgetId)
@@ -61,10 +67,34 @@ const LiveChat = () => {
       ...conv,
       last_message: conv.messages[0],
       unread_count: conv.messages.filter((m: any) => !m.read && m.is_from_visitor).length,
+      status: Math.random() > 0.5 ? 'online' : 'away', // Simulated online status
     }));
 
     setConversations(conversationsWithMeta);
     setLoading(false);
+  }, [widgetId]);
+
+  useEffect(() => {
+    const loadWidgetSettings = async () => {
+      if (!widgetId) return;
+
+      const { data, error } = await supabase
+        .from('widget_settings')
+        .select('*')
+        .eq('id', widgetId)
+        .single();
+
+      if (error) {
+        console.error('Error loading widget settings:', error);
+        return;
+      }
+
+      setWidgetSettings(data);
+    };
+
+    if (widgetId) {
+      loadWidgetSettings();
+    }
   }, [widgetId]);
 
   useEffect(() => {
@@ -99,18 +129,31 @@ const LiveChat = () => {
   }, [widgetId, loadConversations]);
 
   const loadMessages = async (conversationId: string) => {
-    const { data, error } = await supabase
+    const { data: messages, error: messagesError } = await supabase
       .from('messages')
       .select('*')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
 
-    if (error) {
-      console.error('Error loading messages:', error);
+    if (messagesError) {
+      console.error('Error loading messages:', messagesError);
       return;
     }
 
-    setMessages(data);
+    // Add welcome message at the beginning if it doesn't exist
+    if (widgetSettings && messages.every((m: Message) => m.type !== 'welcome')) {
+      const welcomeMessage = {
+        id: 'welcome',
+        content: widgetSettings.welcome_message,
+        is_from_visitor: false,
+        created_at: new Date().toISOString(),
+        type: 'welcome'
+      };
+      setMessages([welcomeMessage, ...messages]);
+    } else {
+      setMessages(messages);
+    }
+
     scrollToBottom();
   };
 
@@ -155,14 +198,27 @@ const LiveChat = () => {
     }
   }, [selectedConversation]);
 
+  const simulateTyping = () => {
+    setIsTyping(true);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+    }, 2000);
+  };
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedConversation) return;
+
+    simulateTyping();
 
     const { error } = await supabase.from('messages').insert({
       conversation_id: selectedConversation,
       content: newMessage,
       is_from_visitor: false,
+      type: 'message'
     });
 
     if (error) {
@@ -231,6 +287,17 @@ const LiveChat = () => {
     return `${days}d ago`;
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'online':
+        return 'bg-green-500';
+      case 'away':
+        return 'bg-yellow-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-[calc(100vh-12rem)] flex items-center justify-center">
@@ -267,15 +334,24 @@ const LiveChat = () => {
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2">
-                    <span className="font-medium text-gray-900">
-                      {conversation.visitor_name}
-                    </span>
-                    {conversation.pinned && (
-                      <Pin className="h-4 w-4 text-blue-600" />
-                    )}
+                    <div className="relative">
+                      <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
+                        <User className="h-6 w-6 text-gray-400" />
+                      </div>
+                      <div className={`absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-white ${getStatusColor(conversation.status)}`}></div>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-900">
+                        {conversation.visitor_name}
+                      </span>
+                      <div className="text-xs text-gray-500 flex items-center space-x-1">
+                        <Clock className="h-3 w-3" />
+                        <span>{formatTimestamp(conversation.created_at)}</span>
+                      </div>
+                    </div>
                   </div>
                   {conversation.last_message && (
-                    <p className="text-sm text-gray-500 truncate">
+                    <p className="text-sm text-gray-500 truncate mt-1">
                       {conversation.last_message.content}
                     </p>
                   )}
@@ -308,11 +384,6 @@ const LiveChat = () => {
                   )}
                 </div>
               </div>
-              {conversation.last_message && (
-                <div className="mt-1 text-xs text-gray-400">
-                  {formatTimestamp(conversation.last_message.created_at)}
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -323,14 +394,26 @@ const LiveChat = () => {
           <>
             <div className="p-4 bg-white border-b flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
-                  <User className="h-6 w-6 text-gray-400" />
+                <div className="relative">
+                  <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
+                    <User className="h-6 w-6 text-gray-400" />
+                  </div>
+                  {conversations.find((c) => c.id === selectedConversation)?.status && (
+                    <div className={`absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-white ${
+                      getStatusColor(conversations.find((c) => c.id === selectedConversation)?.status || '')
+                    }`}></div>
+                  )}
                 </div>
                 <div>
                   <h3 className="font-medium text-gray-900">
                     {conversations.find((c) => c.id === selectedConversation)?.visitor_name}
                   </h3>
-                  <p className="text-sm text-gray-500">Online</p>
+                  <p className="text-sm text-gray-500 flex items-center space-x-1">
+                    <span className={`inline-block h-2 w-2 rounded-full ${
+                      getStatusColor(conversations.find((c) => c.id === selectedConversation)?.status || '')
+                    }`}></span>
+                    <span>{conversations.find((c) => c.id === selectedConversation)?.status}</span>
+                  </p>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
@@ -344,27 +427,45 @@ const LiveChat = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map((message) => (
+              {messages.map((message, index) => (
                 <div
-                  key={message.id}
+                  key={message.id || index}
                   className={`flex ${
                     message.is_from_visitor ? 'justify-start' : 'justify-end'
                   }`}
                 >
                   <div
                     className={`max-w-[70%] px-4 py-2 rounded-lg shadow-sm ${
-                      message.is_from_visitor
+                      message.type === 'welcome'
+                        ? 'bg-blue-50 text-blue-800 border border-blue-100'
+                        : message.is_from_visitor
                         ? 'bg-white text-gray-900'
                         : 'bg-blue-600 text-white'
                     }`}
                   >
                     <p className="text-sm">{message.content}</p>
-                    <span className="text-xs opacity-75 mt-1 block">
-                      {formatTimestamp(message.created_at)}
-                    </span>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className="text-xs opacity-75">
+                        {formatTimestamp(message.created_at)}
+                      </span>
+                      {!message.is_from_visitor && (
+                        <CheckCircle2 className="h-3 w-3 text-blue-200" />
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
+              {isTyping && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 px-4 py-2 rounded-lg">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
 

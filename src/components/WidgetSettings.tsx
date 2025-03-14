@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { HexColorPicker } from 'react-colorful';
-import { MessageSquare, Copy, Check, Trash } from 'lucide-react';
+import { MessageSquare, Copy, Check, Trash, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -31,6 +31,7 @@ const WidgetSettings = () => {
   const [isSaving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   useEffect(() => {
     if (session?.user) {
@@ -40,7 +41,6 @@ const WidgetSettings = () => {
   }, [session]);
 
   const loadSettings = async () => {
-    // First try to get existing settings
     const { data: existingSettings, error: fetchError } = await supabase
       .from('widget_settings')
       .select('*')
@@ -56,7 +56,6 @@ const WidgetSettings = () => {
     if (existingSettings) {
       setSettings(existingSettings);
     } else {
-      // Create initial settings if none exist
       const { data: newSettings, error: createError } = await supabase
         .from('widget_settings')
         .insert([
@@ -122,7 +121,6 @@ const WidgetSettings = () => {
     const updatedQuestions = [...quickQuestions];
     
     if (index >= updatedQuestions.length) {
-      // Add new question
       const { error } = await supabase
         .from('quick_questions')
         .insert({
@@ -136,7 +134,6 @@ const WidgetSettings = () => {
         return;
       }
     } else {
-      // Update existing question
       const question = updatedQuestions[index];
       const { error } = await supabase
         .from('quick_questions')
@@ -150,6 +147,10 @@ const WidgetSettings = () => {
     }
 
     loadQuickQuestions();
+  };
+
+  const addQuickQuestion = () => {
+    setQuickQuestions([...quickQuestions, { id: '', question: '', question_order: quickQuestions.length }]);
   };
 
   const deleteQuickQuestion = async (id: string) => {
@@ -192,11 +193,26 @@ const WidgetSettings = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Primary Color
                   </label>
-                  <HexColorPicker
-                    color={settings.primary_color}
-                    onChange={(color) => setSettings({ ...settings, primary_color: color })}
-                    className="w-full"
-                  />
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowColorPicker(!showColorPicker)}
+                      className="w-full h-10 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      style={{ backgroundColor: settings.primary_color }}
+                    />
+                    {showColorPicker && (
+                      <div className="absolute z-10 mt-2">
+                        <div
+                          className="fixed inset-0"
+                          onClick={() => setShowColorPicker(false)}
+                        />
+                        <HexColorPicker
+                          color={settings.primary_color}
+                          onChange={(color) => setSettings({ ...settings, primary_color: color })}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -243,20 +259,29 @@ const WidgetSettings = () => {
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Action Questions</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Quick Action Questions</h3>
+                <button
+                  onClick={addQuickQuestion}
+                  className="flex items-center space-x-1 text-blue-600 hover:text-blue-500"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add Question</span>
+                </button>
+              </div>
               <div className="space-y-3">
-                {[...Array(3)].map((_, index) => (
+                {quickQuestions.map((question, index) => (
                   <div key={index} className="flex items-center space-x-2">
                     <input
                       type="text"
-                      value={quickQuestions[index]?.question || ''}
+                      value={question.question}
                       onChange={(e) => handleQuickQuestionChange(index, e.target.value)}
                       placeholder={`Question ${index + 1}`}
                       className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
-                    {quickQuestions[index]?.id && (
+                    {question.id && (
                       <button
-                        onClick={() => deleteQuickQuestion(quickQuestions[index].id)}
+                        onClick={() => deleteQuickQuestion(question.id)}
                         className="p-2 text-gray-400 hover:text-red-500"
                       >
                         <Trash className="h-4 w-4" />
@@ -284,16 +309,20 @@ const WidgetSettings = () => {
           <div className="space-y-8">
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Widget Preview</h3>
-              <div
-                className="border rounded-lg p-4 shadow-lg"
-                style={{ backgroundColor: settings.primary_color }}
-              >
-                <div className="flex items-center space-x-2 text-white mb-4">
-                  <MessageSquare className="h-6 w-6" />
-                  <span className="font-medium">{settings.business_name}</span>
+              <div className="border rounded-lg overflow-hidden">
+                <div
+                  className="p-4"
+                  style={{ backgroundColor: settings.primary_color }}
+                >
+                  <div className="flex items-center space-x-2 text-white">
+                    <MessageSquare className="h-6 w-6" />
+                    <span className="font-medium">{settings.business_name}</span>
+                  </div>
                 </div>
-                <div className="bg-white rounded-lg p-4 space-y-4">
-                  <p className="text-gray-800">{settings.welcome_message}</p>
+                <div className="bg-white p-4 space-y-4">
+                  <div className="bg-blue-50 text-blue-800 p-3 rounded-lg border border-blue-100">
+                    {settings.welcome_message}
+                  </div>
                   <div className="space-y-2">
                     {quickQuestions
                       .filter((q) => q.question.trim() !== '')
