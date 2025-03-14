@@ -127,24 +127,37 @@ class BusinessChatPlugin {
       },
       message: {
         maxWidth: '70%',
+        marginBottom: '20px',
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start'
+      },
+      messageContent: {
         padding: '12px 16px',
         borderRadius: '16px',
         fontSize: '14px',
         lineHeight: '1.5',
         position: 'relative',
-        marginBottom: '12px'
+        wordWrap: 'break-word'
       },
       visitorMessage: {
+        alignSelf: 'flex-end',
+        alignItems: 'flex-end'
+      },
+      visitorMessageContent: {
         backgroundColor: '#fff',
         color: '#1f2937',
-        marginLeft: 'auto',
         borderTopRightRadius: '4px',
         boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)'
       },
       agentMessage: {
+        alignSelf: 'flex-start',
+        alignItems: 'flex-start'
+      },
+      agentMessageContent: {
         backgroundColor: '#3B82F6',
         color: '#fff',
-        marginRight: 'auto',
         borderTopLeftRadius: '4px'
       },
       quickQuestion: {
@@ -163,9 +176,24 @@ class BusinessChatPlugin {
       },
       timestamp: {
         fontSize: '11px',
-        opacity: '0.7',
-        marginTop: '4px',
-        display: 'block'
+        color: '#6b7280',
+        marginTop: '4px'
+      },
+      typingIndicator: {
+        display: 'flex',
+        alignItems: 'center',
+        padding: '8px 12px',
+        backgroundColor: '#f3f4f6',
+        borderRadius: '12px',
+        margin: '8px 0',
+        gap: '4px'
+      },
+      typingDot: {
+        width: '6px',
+        height: '6px',
+        backgroundColor: '#9ca3af',
+        borderRadius: '50%',
+        animation: 'typing 1s infinite'
       }
     };
 
@@ -178,6 +206,18 @@ class BusinessChatPlugin {
     await this.loadSettings();
     this.subscribeToMessages();
     this.addEventListeners();
+    this.addTypingAnimation();
+  }
+
+  addTypingAnimation() {
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = `
+      @keyframes typing {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-4px); }
+      }
+    `;
+    document.head.appendChild(styleSheet);
   }
 
   addEventListeners() {
@@ -206,11 +246,37 @@ class BusinessChatPlugin {
     // Add hover effect for the send button
     this.elements.sendButton.addEventListener('mouseenter', () => {
       this.elements.sendButton.style.transform = 'scale(1.05)';
+      this.elements.sendButton.style.backgroundColor = this.adjustColor(this.widgetSettings.primary_color, -20);
     });
 
     this.elements.sendButton.addEventListener('mouseleave', () => {
       this.elements.sendButton.style.transform = 'scale(1)';
+      this.elements.sendButton.style.backgroundColor = this.widgetSettings.primary_color;
     });
+
+    // Add hover effects for quick questions
+    document.querySelectorAll('.quick-question').forEach(button => {
+      button.addEventListener('mouseenter', () => {
+        button.style.backgroundColor = this.widgetSettings.primary_color;
+        button.style.color = 'white';
+        button.style.transform = 'translateY(-1px)';
+      });
+
+      button.addEventListener('mouseleave', () => {
+        button.style.backgroundColor = '#fff';
+        button.style.color = '#374151';
+        button.style.transform = 'translateY(0)';
+      });
+    });
+  }
+
+  adjustColor(color, amount) {
+    const hex = color.replace('#', '');
+    const num = parseInt(hex, 16);
+    const r = Math.min(255, Math.max(0, (num >> 16) + amount));
+    const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount));
+    const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount));
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
   }
 
   async initSupabase() {
@@ -256,7 +322,8 @@ class BusinessChatPlugin {
   createWidget() {
     // Create widget container
     this.elements.container = document.createElement('div');
-    this.elements.container.id = 'business-chat-widget';
+    this.elements.container.id = 
+    'business-chat-widget';
     this.applyStyles(this.elements.container, this.styles.container);
 
     // Create widget button
@@ -342,6 +409,9 @@ class BusinessChatPlugin {
       ...this.styles.sendButton,
       backgroundColor: primaryColor
     });
+
+    // Update agent message styles
+    this.styles.agentMessageContent.backgroundColor = primaryColor;
 
     // Update header with business name
     if (this.elements.header) {
@@ -431,6 +501,25 @@ class BusinessChatPlugin {
     }
   }
 
+  showTypingIndicator() {
+    const typingIndicator = document.createElement('div');
+    this.applyStyles(typingIndicator, this.styles.typingIndicator);
+    
+    for (let i = 0; i < 3; i++) {
+      const dot = document.createElement('div');
+      this.applyStyles(dot, {
+        ...this.styles.typingDot,
+        animationDelay: `${i * 0.2}s`
+      });
+      typingIndicator.appendChild(dot);
+    }
+    
+    this.elements.messagesContainer.appendChild(typingIndicator);
+    this.scrollToBottom();
+    
+    return typingIndicator;
+  }
+
   async sendMessage(content = this.elements.input.value.trim()) {
     if (!content || !this.supabase) return;
 
@@ -512,29 +601,31 @@ class BusinessChatPlugin {
           ...this.styles.message,
           ...(isVisitor ? this.styles.visitorMessage : this.styles.agentMessage)
         };
+        const contentStyles = {
+          ...this.styles.messageContent,
+          ...(isVisitor ? this.styles.visitorMessageContent : this.styles.agentMessageContent)
+        };
 
         return `
-          <div style="
-            display: flex;
-            justify-content: ${isVisitor ? 'flex-end' : 'flex-start'};
-            margin-bottom: 16px;
-          ">
-            <div style="${Object.entries(messageStyles)
+          <div style="${Object.entries(messageStyles)
+            .map(([key, value]) => `${key.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${value}`)
+            .join(';')}">
+            <div style="${Object.entries(contentStyles)
               .map(([key, value]) => `${key.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${value}`)
               .join(';')}">
               ${message.content}
-              <span style="${Object.entries(this.styles.timestamp)
-                .map(([key, value]) => `${key.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${value}`)
-                .join(';')}">
-                ${this.formatTimestamp(message.created_at)}
-              </span>
+            </div>
+            <div style="${Object.entries(this.styles.timestamp)
+              .map(([key, value]) => `${key.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${value}`)
+              .join(';')}">
+              ${this.formatTimestamp(message.created_at)}
             </div>
           </div>
         `;
       })
       .join('');
 
-    this.elements.messagesContainer.scrollTop = this.elements.messagesContainer.scrollHeight;
+    this.scrollToBottom();
   }
 
   subscribeToMessages() {
@@ -604,6 +695,12 @@ class BusinessChatPlugin {
       if (this.elements.input) {
         this.elements.input.focus();
       }
+    }
+  }
+
+  scrollToBottom() {
+    if (this.elements.messagesContainer) {
+      this.elements.messagesContainer.scrollTop = this.elements.messagesContainer.scrollHeight;
     }
   }
 

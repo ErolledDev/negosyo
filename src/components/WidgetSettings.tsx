@@ -13,10 +13,9 @@ interface WidgetSettings {
 }
 
 interface QuickQuestion {
-  id: string;
+  id?: string;
   question: string;
   question_order: number;
-  isNew?: boolean;
 }
 
 const WidgetSettings = () => {
@@ -50,6 +49,16 @@ const WidgetSettings = () => {
 
       if (existingSettings) {
         setSettings(existingSettings);
+
+        // Load quick questions after settings are loaded
+        const { data: questions, error: questionsError } = await supabase
+          .from('quick_questions')
+          .select('*')
+          .eq('widget_id', existingSettings.id)
+          .order('question_order');
+
+        if (questionsError) throw questionsError;
+        setQuickQuestions(questions || []);
       } else {
         const { data: newSettings, error: createError } = await supabase
           .from('widget_settings')
@@ -79,60 +88,61 @@ const WidgetSettings = () => {
     }
   }, [session]);
 
-  const loadQuickQuestions = useCallback(async () => {
-    if (!settings.id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('quick_questions')
-        .select('*')
-        .eq('widget_id', settings.id)
-        .order('question_order');
-
-      if (error) throw error;
-      setQuickQuestions(data || []);
-    } catch (error) {
-      console.error('Error loading quick questions:', error);
-      setSaveStatus({
-        type: 'error',
-        message: 'Failed to load quick questions. Please try again.',
-      });
-    }
-  }, [settings.id]);
-
   useEffect(() => {
     if (session?.user) {
       loadSettings();
     }
   }, [session, loadSettings]);
 
-  useEffect(() => {
-    if (settings.id) {
-      loadQuickQuestions();
-    }
-  }, [settings.id, loadQuickQuestions]);
-
   const saveSettings = async () => {
     setSaving(true);
     setSaveStatus({ type: '', message: '' });
 
     try {
-      const { error } = await supabase
+      // First, save the widget settings
+      const { error: settingsError } = await supabase
         .from('widget_settings')
         .upsert({
-          ...settings,
+          id: settings.id,
           user_id: session?.user.id,
+          business_name: settings.business_name,
+          primary_color: settings.primary_color,
+          welcome_message: settings.welcome_message,
+          fallback_message: settings.fallback_message,
         });
 
-      if (error) throw error;
+      if (settingsError) throw settingsError;
+
+      // Then, handle quick questions
+      if (settings.id) {
+        // Delete all existing quick questions
+        await supabase
+          .from('quick_questions')
+          .delete()
+          .eq('widget_id', settings.id);
+
+        // Insert all current quick questions
+        if (quickQuestions.length > 0) {
+          const { error: questionsError } = await supabase
+            .from('quick_questions')
+            .insert(
+              quickQuestions
+                .filter(q => q.question.trim() !== '')
+                .map((q, index) => ({
+                  widget_id: settings.id,
+                  question: q.question,
+                  question_order: index,
+                }))
+            );
+
+          if (questionsError) throw questionsError;
+        }
+      }
 
       setSaveStatus({
         type: 'success',
-        message: 'Settings saved successfully!',
+        message: 'All settings saved successfully!',
       });
-
-      // Reload settings to ensure we have the latest data
-      await loadSettings();
     } catch (error) {
       console.error('Error saving settings:', error);
       setSaveStatus({
@@ -147,94 +157,27 @@ const WidgetSettings = () => {
     }
   };
 
-  const handleQuickQuestionChange = async (index: number, value: string) => {
-    const updatedQuestions = [...quickQuestions];
-    const question = updatedQuestions[index];
-    
-    try {
-      if (!question.id || question.isNew) {
-        // This is a new question that needs to be inserted
-        const { data, error } = await supabase
-          .from('quick_questions')
-          .insert({
-            widget_id: settings.id,
-            question: value,
-            question_order: index,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        
-        // Update the local state with the new question data
-        updatedQuestions[index] = {
-          ...data,
-          isNew: false
-        };
-        setQuickQuestions(updatedQuestions);
-      } else {
-        // This is an existing question that needs to be updated
-        const { error } = await supabase
-          .from('quick_questions')
-          .update({ question: value })
-          .eq('id', question.id);
-
-        if (error) throw error;
-        
-        // Update the local state
-        updatedQuestions[index] = {
-          ...question,
-          question: value
-        };
-        setQuickQuestions(updatedQuestions);
-      }
-
-      setSaveStatus({
-        type: 'success',
-        message: 'Quick question saved successfully!',
-      });
-    } catch (error) {
-      console.error('Error updating quick question:', error);
-      setSaveStatus({
-        type: 'error',
-        message: 'Failed to save quick question. Please try again.',
-      });
-    }
-  };
-
   const addQuickQuestion = () => {
     setQuickQuestions([
       ...quickQuestions,
       {
-        id: '',
         question: '',
         question_order: quickQuestions.length,
-        isNew: true
       }
     ]);
   };
 
-  const deleteQuickQuestion = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('quick_questions')
-        .delete()
-        .eq('id', id);
+  const updateQuickQuestion = (index: number, question: string) => {
+    const updatedQuestions = [...quickQuestions];
+    updatedQuestions[index] = {
+      ...updatedQuestions[index],
+      question,
+    };
+    setQuickQuestions(updatedQuestions);
+  };
 
-      if (error) throw error;
-
-      await loadQuickQuestions();
-      setSaveStatus({
-        type: 'success',
-        message: 'Quick question deleted successfully!',
-      });
-    } catch (error) {
-      console.error('Error deleting quick question:', error);
-      setSaveStatus({
-        type: 'error',
-        message: 'Failed to delete quick question. Please try again.',
-      });
-    }
+  const removeQuickQuestion = (index: number) => {
+    setQuickQuestions(quickQuestions.filter((_, i) => i !== index));
   };
 
   const copyInstallCode = () => {
@@ -358,18 +301,16 @@ const WidgetSettings = () => {
                     <input
                       type="text"
                       value={question.question}
-                      onChange={(e) => handleQuickQuestionChange(index, e.target.value)}
+                      onChange={(e) => updateQuickQuestion(index, e.target.value)}
                       placeholder={`Question ${index + 1}`}
                       className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-shadow"
                     />
-                    {question.id && (
-                      <button
-                        onClick={() => deleteQuickQuestion(question.id)}
-                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                      >
-                        <Trash className="h-4 w-4" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => removeQuickQuestion(index)}
+                      className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash className="h-4 w-4" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -387,7 +328,7 @@ const WidgetSettings = () => {
                     Saving...
                   </>
                 ) : (
-                  'Save Settings'
+                  'Save All Settings'
                 )}
               </button>
               {saveStatus.message && (
